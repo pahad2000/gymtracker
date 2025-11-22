@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workouts         Workout[]
+  workoutSessions  WorkoutSession[]
+
+  @@map("users")
+}
+
+model Workout {
+  id            String    @id @default(cuid())
+  name          String
+  weight        Float     // Weight in kg/lbs
+  restTime      Int       // Rest time in seconds
+  sets          Int       // Number of sets
+  repsPerSet    Int       // Reps per set
+  notes         String?
+  aiTip         String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Schedule: either every N days or specific weekdays (0=Sun, 6=Sat)
+  intervalDays  Int?      // Every n days (null if using specific days)
+  scheduleDays  Int[]     // Array of weekday numbers [0-6]
+  startDate     DateTime  @default(now())
+
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sessions      WorkoutSession[]
+
+  @@map("workouts")
+}
+
+model WorkoutSession {
+  id              String    @id @default(cuid())
+  date            DateTime  @default(now())
+  completed       Boolean   @default(false)
+  setsCompleted   Int       @default(0)
+  repsPerSet      Int[]     // Actual reps done per set
+  weightUsed      Float?
+  duration        Int?      // Duration in seconds
+
+  workoutId       String
+  workout         Workout   @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("workout_sessions")
+}
