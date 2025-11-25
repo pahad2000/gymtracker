@@ -2,39 +2,33 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, GripVertical, ChevronUp, ChevronDown, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { WorkoutPlayer } from "@/components/workout-player";
-import { isWorkoutScheduledForDate } from "@/lib/utils";
-import type { Workout, WorkoutSession } from "@/types";
+import { isWorkoutScheduledForDate, getCycleWorkoutForDate } from "@/lib/utils";
+import type { Workout, WorkoutSession, WorkoutCycle } from "@/types";
 
 export default function TodayPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [cycles, setCycles] = useState<WorkoutCycle[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [creatingCustom, setCreatingCustom] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   const today = new Date();
 
   const fetchData = useCallback(async () => {
     try {
-      const todayStart = new Date(today);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
+      // Single API call instead of 5 separate calls
+      const res = await fetch("/api/today");
+      const data = await res.json();
 
-      const [workoutsRes, sessionsRes] = await Promise.all([
-        fetch("/api/workouts"),
-        fetch(
-          `/api/sessions?startDate=${todayStart.toISOString()}&endDate=${todayEnd.toISOString()}`
-        ),
-      ]);
-      const [workoutsData, sessionsData] = await Promise.all([
-        workoutsRes.json(),
-        sessionsRes.json(),
-      ]);
-      setWorkouts(workoutsData);
-      setSessions(sessionsData);
+      setWorkouts(data.workouts);
+      setCycles(data.cycles);
+      setSessions(data.todaySessions);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -46,9 +40,36 @@ export default function TodayPage() {
     fetchData();
   }, [fetchData]);
 
-  const scheduledWorkouts = workouts.filter((workout) =>
-    isWorkoutScheduledForDate(workout, today)
-  );
+  // Get scheduled workouts (includes both standalone and cycle workouts)
+  const getAvailableWorkouts = (): Workout[] => {
+    const result: Workout[] = [];
+
+    // Get standalone workouts (not in a cycle)
+    const standaloneWorkouts = workouts.filter((w) => !w.cycleId);
+
+    // Show all scheduled standalone workouts for today
+    for (const workout of standaloneWorkouts) {
+      if (isWorkoutScheduledForDate(workout, today)) {
+        result.push(workout);
+      }
+    }
+
+    // Get workouts from cycles scheduled for today
+    for (const cycle of cycles) {
+      const cycleWorkout = getCycleWorkoutForDate(cycle, today);
+      if (cycleWorkout) {
+        // Find the full workout data
+        const fullWorkout = workouts.find((w) => w.id === cycleWorkout.id);
+        if (fullWorkout) {
+          result.push(fullWorkout);
+        }
+      }
+    }
+
+    return result;
+  };
+
+  const scheduledWorkouts = getAvailableWorkouts();
 
   const createSessionsForToday = async () => {
     setCreating(true);
@@ -73,21 +94,70 @@ export default function TodayPage() {
     }
   };
 
+  const createCustomSession = async (workoutId: string) => {
+    setCreatingCustom(true);
+    try {
+      await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workoutId }),
+      });
+      fetchData();
+    } catch (error) {
+      console.error("Failed to create session:", error);
+    } finally {
+      setCreatingCustom(false);
+    }
+  };
+
   const updateSession = async (
     sessionId: string,
     data: { setsCompleted?: number; repsPerSet?: number[]; completed?: boolean }
   ) => {
+    // Optimistic update - update local state immediately for instant feedback
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId ? { ...s, ...data } : s
+      )
+    );
+    setAllSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId ? { ...s, ...data } : s
+      )
+    );
+
+    // Only refetch if workout is completed (to get fresh data for next session)
     await fetch(`/api/sessions/${sessionId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    fetchData();
+
+    // Only refetch if completing a workout - otherwise optimistic update is enough
+    if (data.completed) {
+      fetchData();
+    }
   };
 
   const regenerateTip = async (workoutId: string) => {
     await fetch(`/api/workouts/${workoutId}/regenerate-tip`, {
       method: "POST",
+    });
+    fetchData();
+  };
+
+  const moveWorkout = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= scheduledWorkouts.length) return;
+
+    const newWorkouts = [...scheduledWorkouts];
+    [newWorkouts[index], newWorkouts[newIndex]] = [newWorkouts[newIndex], newWorkouts[index]];
+
+    // Save the new order
+    await fetch("/api/workouts/reorder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workoutIds: newWorkouts.map((w) => w.id) }),
     });
     fetchData();
   };
@@ -104,8 +174,7 @@ export default function TodayPage() {
     sessions.some((s) => s.workoutId === workout.id)
   );
 
-  // Get only incomplete sessions
-  const incompleteSessions = sessions.filter((s) => !s.completed);
+  const sessionsToShow = sessions.filter((s) => !s.completed);
 
   return (
     <div className="space-y-6">
@@ -115,37 +184,129 @@ export default function TodayPage() {
       </div>
 
       {scheduledWorkouts.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No workouts scheduled for today</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">
-            Add workouts and set a schedule to get started
-          </p>
+        <div className="space-y-4">
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No workouts scheduled for today</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">
+              Select a workout below to play today
+            </p>
+          </div>
+
+          {workouts.length > 0 ? (
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-3">
+                    Available Workouts
+                  </p>
+                  {workouts.map((workout) => (
+                    <button
+                      key={workout.id}
+                      onClick={() => createCustomSession(workout.id)}
+                      disabled={creatingCustom}
+                      className="w-full flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
+                    >
+                      <div>
+                        <p className="font-medium">{workout.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {workout.sets} sets × {workout.repsPerSet} reps @ {workout.weight}kg
+                        </p>
+                      </div>
+                      <Plus className="h-5 w-5 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground/70">
+                Add workouts and set a schedule to get started
+              </p>
+            </div>
+          )}
         </div>
-      ) : !hasAllSessions ? (
-        <div className="text-center py-12 space-y-4">
-          <p className="text-muted-foreground">
-            You have {scheduledWorkouts.length} workout(s) scheduled for today
-          </p>
-          <Button onClick={createSessionsForToday} disabled={creating}>
-            {creating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Starting...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                Start Today&apos;s Workout
-              </>
-            )}
-          </Button>
+      ) : sessionsToShow.length === 0 && !hasAllSessions && scheduledWorkouts.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-muted-foreground">
+              {scheduledWorkouts.length} workout(s) scheduled for today
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setReorderMode(!reorderMode)}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              {reorderMode ? "Done" : "Reorder"}
+            </Button>
+          </div>
+
+          {reorderMode ? (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                {scheduledWorkouts.map((workout, index) => (
+                  <div
+                    key={workout.id}
+                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl"
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex-1 font-medium">{workout.name}</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => moveWorkout(index, "up")}
+                        disabled={index === 0}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => moveWorkout(index, "down")}
+                        disabled={index === scheduledWorkouts.length - 1}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center py-8">
+              <Button onClick={createSessionsForToday} disabled={creating}>
+                {creating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Start Today&apos;s Workout
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
-      ) : (
+      ) : sessionsToShow.length > 0 ? (
         <WorkoutPlayer
-          sessions={incompleteSessions}
+          sessions={sessionsToShow}
           onUpdateSession={updateSession}
           onRegenerateTip={regenerateTip}
         />
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">All workouts completed!</p>
+          <p className="text-sm text-muted-foreground/70 mt-1">
+            Great job! Come back tomorrow for more.
+          </p>
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateWorkoutTip } from "@/lib/ollama";
+import { generateWorkoutTipAsync } from "@/lib/ai";
 
 export async function GET() {
   try {
@@ -12,7 +12,7 @@ export async function GET() {
 
     const workouts = await prisma.workout.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
     });
 
     return NextResponse.json(workouts);
@@ -35,9 +35,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, weight, restTime, sets, repsPerSet, notes, intervalDays, scheduleDays, startDate } = body;
 
-    // Generate AI tip for the workout
-    const aiTip = await generateWorkoutTip(name);
-
+    // Create workout first, then generate AI tip asynchronously
     const workout = await prisma.workout.create({
       data: {
         name,
@@ -46,13 +44,16 @@ export async function POST(request: Request) {
         sets: parseInt(sets),
         repsPerSet: parseInt(repsPerSet),
         notes,
-        aiTip,
+        aiTip: "Generating tip...", // Placeholder
         intervalDays: intervalDays ? parseInt(intervalDays) : null,
         scheduleDays: scheduleDays || [],
         startDate: startDate ? new Date(startDate) : new Date(),
         userId: session.user.id,
       },
     });
+
+    // Generate AI tip asynchronously (doesn't block response)
+    generateWorkoutTipAsync(workout.id, name).catch(console.error);
 
     return NextResponse.json(workout);
   } catch (error) {

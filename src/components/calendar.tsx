@@ -15,11 +15,12 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight, Dumbbell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, isWorkoutScheduledForDate } from "@/lib/utils";
-import type { Workout, WorkoutSession } from "@/types";
+import { cn, isWorkoutScheduledForDate, getCycleWorkoutForDate } from "@/lib/utils";
+import type { Workout, WorkoutSession, WorkoutCycle } from "@/types";
 
 interface CalendarProps {
   workouts: Workout[];
+  cycles?: WorkoutCycle[];
   sessions: WorkoutSession[];
   onDateSelect: (date: Date) => void;
   selectedDate: Date;
@@ -27,6 +28,7 @@ interface CalendarProps {
 
 export function Calendar({
   workouts,
+  cycles = [],
   sessions,
   onDateSelect,
   selectedDate,
@@ -40,8 +42,29 @@ export function Calendar({
 
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  const getWorkoutsForDate = (date: Date) => {
-    return workouts.filter((workout) => isWorkoutScheduledForDate(workout, date));
+  const getWorkoutsForDate = (date: Date): Workout[] => {
+    const result: Workout[] = [];
+
+    // Standalone workouts (not in a cycle)
+    const standaloneWorkouts = workouts.filter((w) => !w.cycleId);
+    for (const workout of standaloneWorkouts) {
+      if (isWorkoutScheduledForDate(workout, date)) {
+        result.push(workout);
+      }
+    }
+
+    // Workouts from cycles
+    for (const cycle of cycles) {
+      const cycleWorkout = getCycleWorkoutForDate(cycle, date);
+      if (cycleWorkout) {
+        const fullWorkout = workouts.find((w) => w.id === cycleWorkout.id);
+        if (fullWorkout) {
+          result.push(fullWorkout);
+        }
+      }
+    }
+
+    return result;
   };
 
   const getSessionsForDate = (date: Date) => {

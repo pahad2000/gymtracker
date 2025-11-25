@@ -16,7 +16,10 @@ This guide explains how the GymTracker application works, written for developers
 8. [How Data Flows](#how-data-flows)
 9. [Styling with Tailwind](#styling-with-tailwind)
 10. [Workout Scheduling Logic](#workout-scheduling-logic)
-11. [The AI Tips Feature](#the-ai-tips-feature)
+11. [Workout Cycles](#workout-cycles)
+12. [The AI Tips Feature](#the-ai-tips-feature)
+13. [Theme System](#theme-system)
+14. [Adaptive Mode](#adaptive-mode)
 
 ---
 
@@ -722,44 +725,180 @@ if (scheduledWorkouts.length > 0) {
 
 ---
 
+## Workout Cycles
+
+### What are Workout Cycles?
+
+Cycles let you group workouts to rotate through on a schedule. For example, a "Push Pull Legs" cycle with three workouts scheduled every 2 days would:
+- Day 1: Push workout
+- Day 3: Pull workout
+- Day 5: Legs workout
+- Day 7: Push workout (back to start)
+
+### How Cycles Work
+
+```typescript
+// Determining which workout in a cycle to show
+function getCycleWorkoutForDate(cycle, date) {
+  // Count how many scheduled days have passed
+  const scheduledDates = getScheduledCycleDatesUpTo(cycle, date);
+
+  // Rotate through workouts
+  const index = (scheduledDates.length - 1) % cycle.workouts.length;
+
+  return cycle.workouts[index];
+}
+```
+
+### Database Structure
+
+Workouts can optionally belong to a cycle:
+```prisma
+model Workout {
+  cycleId     String?        // Which cycle (if any)
+  cycleOrder  Int?           // Position in cycle (0, 1, 2...)
+  cycle       WorkoutCycle?  // Relationship
+}
+```
+
+---
+
 ## The AI Tips Feature
 
-### What is Ollama?
+### What is Google Gemini?
 
-Ollama runs AI language models locally on your computer. It's like having a mini ChatGPT that doesn't need internet.
+Gemini is Google's AI model. We use the free tier of Gemini 1.5 Flash to generate workout tips.
 
 ### How Tips are Generated
 
 ```typescript
-// src/lib/ollama.ts
+// src/lib/ai.ts
 
 async function generateWorkoutTip(workoutName) {
-  const response = await fetch("http://localhost:11434/api/generate", {
-    method: "POST",
-    body: JSON.stringify({
-      model: "llama3.2",
-      prompt: `Give a brief fitness tip for: ${workoutName}`,
-      stream: false  // Wait for complete response
-    })
-  });
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `Give a brief fitness tip for: ${workoutName}` }]
+        }]
+      })
+    }
+  );
 
   const data = await response.json();
-  return data.response;
+  return data.candidates[0].content.parts[0].text;
 }
 ```
 
-### When Tips are Generated
+### Async Generation
 
-1. **On workout creation** - Automatic
-2. **On workout rename** - Automatic (if name changes)
-3. **On user request** - Click refresh button in workout player
+Tips are generated **asynchronously** - they don't block workout creation:
 
-### Fallback Behavior
+```typescript
+// In POST /api/workouts
+const workout = await prisma.workout.create({ ... });
 
-If Ollama isn't running, a default tip is shown:
+// Fire and forget - tip updates in background
+generateWorkoutTipAsync(workout.id, workout.name);
+
+return NextResponse.json(workout);  // Returns immediately
 ```
-"Focus on proper form, controlled movements, and consistent breathing."
+
+### Fallback Tips
+
+If the API is unavailable, built-in tips are used:
+```typescript
+const FALLBACK_TIPS = {
+  bench: "Keep your feet flat, shoulder blades pinched...",
+  squat: "Keep your core tight, chest up...",
+  default: "Focus on proper form and breathing."
+};
 ```
+
+---
+
+## Theme System
+
+### How Theming Works
+
+The app supports three theme modes:
+- **Auto**: Light during day (7am-7pm), dark at night
+- **Light**: Always light theme
+- **Dark**: Always dark theme
+
+### Implementation
+
+```typescript
+// ThemeProvider context
+function ThemeProvider({ children, initialThemeMode }) {
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    if (themeMode === "auto") {
+      const hour = new Date().getHours();
+      setTheme(hour >= 7 && hour < 19 ? "light" : "dark");
+    } else {
+      setTheme(themeMode);
+    }
+
+    // Apply to HTML element
+    document.documentElement.classList.add(theme);
+  }, [themeMode]);
+}
+```
+
+### CSS Variables
+
+Themes are defined using CSS variables:
+```css
+/* Dark theme (default) */
+:root {
+  --background: 224 71% 4%;
+  --foreground: 210 20% 98%;
+}
+
+/* Light theme */
+.light {
+  --background: 0 0% 100%;
+  --foreground: 224 71% 4%;
+}
+```
+
+---
+
+## Adaptive Mode
+
+### What is Adaptive Mode?
+
+When enabled, incomplete workouts block future scheduled workouts. This ensures you don't skip ahead without finishing previous workouts.
+
+### How It Works
+
+```typescript
+function isWorkoutAvailableAdaptive(workout, date, allSessions) {
+  // Find oldest incomplete session for this workout
+  const oldestIncomplete = getOldestIncompleteSessionDate(workoutSessions);
+
+  // If there's an incomplete session, only that date is available
+  if (oldestIncomplete) {
+    return date === oldestIncomplete;
+  }
+
+  // Otherwise, normal scheduling applies
+  return isWorkoutScheduledForDate(workout, date);
+}
+```
+
+### Completion Rate Calculation
+
+In adaptive mode:
+```
+Completion Rate = Completed Workouts / Total Scheduled to Date
+```
+
+Rather than completed / created sessions.
 
 ---
 

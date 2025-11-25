@@ -12,13 +12,36 @@ model User {
   email         String    @unique
   name          String?
   password      String
+  themeMode     String    @default("auto") // auto, light, dark
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   workouts         Workout[]
   workoutSessions  WorkoutSession[]
+  workoutCycles    WorkoutCycle[]
 
   @@map("users")
+}
+
+model WorkoutCycle {
+  id            String    @id @default(cuid())
+  name          String
+
+  // Schedule for the cycle
+  intervalDays  Int?      // Every n days (null if using specific days)
+  scheduleDays  Int[]     // Array of weekday numbers [0-6]
+  startDate     DateTime  @default(now())
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workouts      Workout[]
+
+  @@index([userId])
+  @@map("workout_cycles")
 }
 
 model Workout {
@@ -33,16 +56,25 @@ model Workout {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  // Schedule: either every N days or specific weekdays (0=Sun, 6=Sat)
+  // Schedule for standalone workouts (ignored if part of a cycle)
   intervalDays  Int?      // Every n days (null if using specific days)
   scheduleDays  Int[]     // Array of weekday numbers [0-6]
   startDate     DateTime  @default(now())
+
+  // Cycle membership (optional)
+  cycleId       String?
+  cycle         WorkoutCycle? @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleOrder    Int?      // Order within the cycle (0, 1, 2, ...)
+
+  displayOrder  Int       @default(0)  // Manual ordering for Today page
 
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   sessions      WorkoutSession[]
 
+  @@index([userId])
+  @@index([userId, displayOrder])
   @@map("workouts")
 }
 
@@ -61,5 +93,8 @@ model WorkoutSession {
   userId          String
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([userId, date])
+  @@index([workoutId])
   @@map("workout_sessions")
 }

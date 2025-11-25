@@ -5,29 +5,26 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Loader2, Dumbbell } from "lucide-react";
 import { Calendar } from "@/components/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { isWorkoutScheduledForDate } from "@/lib/utils";
-import type { Workout, WorkoutSession } from "@/types";
+import { isWorkoutScheduledForDate, getCycleWorkoutForDate } from "@/lib/utils";
+import type { Workout, WorkoutSession, WorkoutCycle } from "@/types";
 
 export default function CalendarPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [cycles, setCycles] = useState<WorkoutCycle[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [workoutsRes, sessionsRes] = await Promise.all([
-        fetch("/api/workouts"),
-        fetch(
-          `/api/sessions?startDate=${startOfMonth(selectedDate).toISOString()}&endDate=${endOfMonth(selectedDate).toISOString()}`
-        ),
-      ]);
-      const [workoutsData, sessionsData] = await Promise.all([
-        workoutsRes.json(),
-        sessionsRes.json(),
-      ]);
-      setWorkouts(workoutsData);
-      setSessions(sessionsData);
+      // Single API call instead of 3 separate calls
+      const res = await fetch(
+        `/api/calendar?startDate=${startOfMonth(selectedDate).toISOString()}&endDate=${endOfMonth(selectedDate).toISOString()}`
+      );
+      const data = await res.json();
+      setWorkouts(data.workouts);
+      setCycles(data.cycles);
+      setSessions(data.sessions);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -39,9 +36,33 @@ export default function CalendarPage() {
     fetchData();
   }, [fetchData]);
 
-  const scheduledWorkoutsForDate = workouts.filter((workout) =>
-    isWorkoutScheduledForDate(workout, selectedDate)
-  );
+  // Get scheduled workouts for date (standalone + from cycles)
+  const getScheduledWorkoutsForDate = (date: Date): Workout[] => {
+    const result: Workout[] = [];
+
+    // Standalone workouts (not in a cycle)
+    const standaloneWorkouts = workouts.filter((w) => !w.cycleId);
+    for (const workout of standaloneWorkouts) {
+      if (isWorkoutScheduledForDate(workout, date)) {
+        result.push(workout);
+      }
+    }
+
+    // Workouts from cycles
+    for (const cycle of cycles) {
+      const cycleWorkout = getCycleWorkoutForDate(cycle, date);
+      if (cycleWorkout) {
+        const fullWorkout = workouts.find((w) => w.id === cycleWorkout.id);
+        if (fullWorkout) {
+          result.push(fullWorkout);
+        }
+      }
+    }
+
+    return result;
+  };
+
+  const scheduledWorkoutsForDate = getScheduledWorkoutsForDate(selectedDate);
 
   const sessionsForDate = sessions.filter(
     (session) =>
@@ -66,6 +87,7 @@ export default function CalendarPage() {
 
       <Calendar
         workouts={workouts}
+        cycles={cycles}
         sessions={sessions}
         selectedDate={selectedDate}
         onDateSelect={setSelectedDate}

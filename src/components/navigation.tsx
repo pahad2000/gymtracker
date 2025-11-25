@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, Dumbbell, BarChart3, Play, LogOut } from "lucide-react";
+import { Calendar, Dumbbell, BarChart3, Play, LogOut, Settings, RotateCw } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -10,8 +10,17 @@ import { Button } from "./ui/button";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/workouts", label: "Workouts", icon: Dumbbell },
+  { href: "/cycles", label: "Cycles", icon: RotateCw },
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/today", label: "Today", icon: Play },
+];
+
+const mobileNavItems = [
+  { href: "/dashboard", label: "Stats", icon: BarChart3 },
+  { href: "/workouts", label: "Workouts", icon: Dumbbell },
+  { href: "/cycles", label: "Cycles", icon: RotateCw },
+  { href: "/today", label: "Today", icon: Play },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Navigation() {
@@ -47,7 +56,19 @@ export function Navigation() {
               );
             })}
           </nav>
-          <div className="px-3 pb-4">
+          <div className="px-3 pb-4 space-y-1">
+            <Link
+              href="/settings"
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
+                pathname === "/settings"
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Settings className="h-5 w-5" />
+              Settings
+            </Link>
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-muted-foreground"
@@ -63,7 +84,7 @@ export function Navigation() {
       {/* Mobile bottom navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t safe-area-pb z-50">
         <div className="flex items-center justify-around py-2">
-          {navItems.map((item) => {
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (
@@ -71,14 +92,14 @@ export function Navigation() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all min-w-[64px]",
+                  "flex flex-col items-center gap-1 px-2 py-2 rounded-xl transition-all min-w-[56px]",
                   isActive
                     ? "text-primary"
                     : "text-muted-foreground"
                 )}
               >
-                <Icon className={cn("h-6 w-6", isActive && "scale-110")} />
-                <span className="text-xs font-medium">{item.label}</span>
+                <Icon className={cn("h-5 w-5", isActive && "scale-110")} />
+                <span className="text-[10px] font-medium">{item.label}</span>
               </Link>
             );
           })}

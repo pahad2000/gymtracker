@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ type WorkoutFormData = {
   notes?: string;
   intervalDays: number | null;
   scheduleDays: number[];
+  startDate?: string;
 };
 
 interface WorkoutFormProps {
@@ -61,6 +63,9 @@ export function WorkoutForm({
     notes: initialData?.notes || "",
     intervalDays: initialData?.intervalDays?.toString() || "1",
     scheduleDays: initialData?.scheduleDays || [],
+    startDate: initialData?.startDate
+      ? format(new Date(initialData.startDate), "yyyy-MM-dd")
+      : format(new Date(), "yyyy-MM-dd"),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,6 +82,7 @@ export function WorkoutForm({
         notes: formData.notes || undefined,
         intervalDays: scheduleType === "interval" ? parseInt(formData.intervalDays) : null,
         scheduleDays: scheduleType === "days" ? formData.scheduleDays : [],
+        startDate: scheduleType === "interval" ? formData.startDate : undefined,
       });
       onClose();
     } catch (error) {
@@ -219,21 +225,37 @@ export function WorkoutForm({
             </div>
 
             {scheduleType === "interval" ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Every</span>
-                <Input
-                  type="number"
-                  min="1"
-                  className="w-20"
-                  value={formData.intervalDays}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      intervalDays: e.target.value,
-                    }))
-                  }
-                />
-                <span className="text-sm">day(s)</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Every</span>
+                  <Input
+                    type="number"
+                    min="1"
+                    className="w-20"
+                    value={formData.intervalDays}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        intervalDays: e.target.value,
+                      }))
+                    }
+                  />
+                  <span className="text-sm">day(s)</span>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="startDate" className="text-sm">Starting from</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        startDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">

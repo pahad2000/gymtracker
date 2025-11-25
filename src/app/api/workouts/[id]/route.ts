@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateWorkoutTip } from "@/lib/ollama";
+import { generateWorkoutTip } from "@/lib/ai";
 
 export async function GET(
   request: Request,

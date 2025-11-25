@@ -1,3 +1,15 @@
+export type WorkoutCycle = {
+  id: string;
+  name: string;
+  intervalDays: number | null;
+  scheduleDays: number[];
+  startDate: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+  userId?: string;
+  workouts?: Workout[];
+};
+
 export type Workout = {
   id: string;
   name: string;
@@ -10,6 +22,10 @@ export type Workout = {
   intervalDays: number | null;
   scheduleDays: number[];
   startDate: Date;
+  cycleId?: string | null;
+  cycle?: WorkoutCycle | null;
+  cycleOrder?: number | null;
+  displayOrder?: number;
   createdAt?: Date;
   updatedAt?: Date;
   userId?: string;
