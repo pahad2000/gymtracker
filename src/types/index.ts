@@ -13,10 +13,11 @@ export type WorkoutCycle = {
 export type Workout = {
   id: string;
   name: string;
-  weight: number;
+  workoutType: "weight" | "time";
+  weight: number; // For time-based, this stores duration in seconds
   restTime: number;
   sets: number;
-  repsPerSet: number;
+  repsPerSet: number; // For time-based, this stores duration per set in seconds
   notes?: string | null;
   aiTip?: string | null;
   intervalDays: number | null;

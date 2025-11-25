@@ -13,6 +13,7 @@ export default function TodayPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [cycles, setCycles] = useState<WorkoutCycle[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
+  const [recentSessions, setRecentSessions] = useState<WorkoutSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [creatingCustom, setCreatingCustom] = useState(false);
@@ -29,6 +30,7 @@ export default function TodayPage() {
       setWorkouts(data.workouts);
       setCycles(data.cycles);
       setSessions(data.todaySessions);
+      setRecentSessions(data.recentSessions || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -110,6 +112,39 @@ export default function TodayPage() {
     }
   };
 
+  const createSessionsFromDay = async (date: string) => {
+    setCreatingCustom(true);
+    try {
+      const sessionsForDay = recentSessions.filter((s) => {
+        const sessionDate = new Date(s.date);
+        return format(sessionDate, "yyyy-MM-dd") === date;
+      });
+
+      for (const session of sessionsForDay) {
+        await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutId: session.workoutId }),
+        });
+      }
+      fetchData();
+    } catch (error) {
+      console.error("Failed to create sessions:", error);
+    } finally {
+      setCreatingCustom(false);
+    }
+  };
+
+  // Group recent sessions by date
+  const sessionsByDate = recentSessions.reduce((acc, session) => {
+    const dateKey = format(new Date(session.date), "yyyy-MM-dd");
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(session);
+    return acc;
+  }, {} as Record<string, WorkoutSession[]>);
+
   const updateSession = async (
     sessionId: string,
     data: { setsCompleted?: number; repsPerSet?: number[]; completed?: boolean }
@@ -183,40 +218,53 @@ export default function TodayPage() {
           <div className="text-center py-8">
             <p className="text-muted-foreground">No workouts scheduled for today</p>
             <p className="text-sm text-muted-foreground/70 mt-1">
-              Select a workout below to play today
+              Select a day below to play those workouts today
             </p>
           </div>
 
-          {workouts.length > 0 ? (
-            <Card>
-              <CardContent className="p-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground mb-3">
-                    Available Workouts
-                  </p>
-                  {workouts.map((workout) => (
+          {Object.keys(sessionsByDate).length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-muted-foreground">
+                Recent Workout Days
+              </p>
+              {Object.entries(sessionsByDate).map(([date, daySessions]) => (
+                <Card key={date} className="hover:bg-muted/50 transition-colors">
+                  <CardContent className="p-4">
                     <button
-                      key={workout.id}
-                      onClick={() => createCustomSession(workout.id)}
+                      onClick={() => createSessionsFromDay(date)}
                       disabled={creatingCustom}
-                      className="w-full flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
+                      className="w-full text-left"
                     >
-                      <div>
-                        <p className="font-medium">{workout.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {workout.sets} sets × {workout.repsPerSet} reps @ {workout.weight}kg
-                        </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="font-medium">
+                            {format(new Date(date), "EEEE, MMMM d")}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {daySessions.length} workout{daySessions.length > 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <Plus className="h-5 w-5 text-muted-foreground" />
                       </div>
-                      <Plus className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex flex-wrap gap-2">
+                        {daySessions.map((session) => (
+                          <div
+                            key={session.id}
+                            className="text-xs px-2 py-1 bg-muted rounded"
+                          >
+                            {session.workout.name}
+                          </div>
+                        ))}
+                      </div>
                     </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground/70">
-                Add workouts and set a schedule to get started
+                No recent workouts found. Add workouts and set a schedule to get started
               </p>
             </div>
           )}

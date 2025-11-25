@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         workouts: {
           create: workouts?.map((workout: any, index: number) => ({
             name: workout.name,
+            workoutType: workout.workoutType || "weight",
             weight: workout.weight,
             restTime: workout.restTime,
             sets: workout.sets,

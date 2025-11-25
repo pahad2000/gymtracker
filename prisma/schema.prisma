@@ -47,10 +47,11 @@ model WorkoutCycle {
 model Workout {
   id            String    @id @default(cuid())
   name          String
-  weight        Float     // Weight in kg/lbs
+  workoutType   String    @default("weight") // "weight" or "time"
+  weight        Float     // Weight in kg/lbs (or duration in seconds for time-based)
   restTime      Int       // Rest time in seconds
   sets          Int       // Number of sets
-  repsPerSet    Int       // Reps per set
+  repsPerSet    Int       // Reps per set (or duration per set for time-based)
   notes         String?
   aiTip         String?   @db.Text
   createdAt     DateTime  @default(now())

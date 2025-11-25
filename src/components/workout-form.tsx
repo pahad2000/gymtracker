@@ -17,6 +17,7 @@ import type { Workout } from "@/types";
 
 type WorkoutFormData = {
   name: string;
+  workoutType: "weight" | "time";
   weight: number;
   restTime: number;
   sets: number;
@@ -51,6 +52,9 @@ export function WorkoutForm({
   initialData,
 }: WorkoutFormProps) {
   const [loading, setLoading] = useState(false);
+  const [workoutType, setWorkoutType] = useState<"weight" | "time">(
+    initialData?.workoutType || "weight"
+  );
   const [scheduleType, setScheduleType] = useState<"interval" | "days">(
     initialData?.intervalDays ? "interval" : "days"
   );
@@ -75,6 +79,7 @@ export function WorkoutForm({
     try {
       await onSubmit({
         name: formData.name,
+        workoutType,
         weight: parseFloat(formData.weight),
         restTime: parseInt(formData.restTime),
         sets: parseInt(formData.sets),
@@ -116,11 +121,35 @@ export function WorkoutForm({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-3">
+            <Label>Workout Type</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={workoutType === "weight" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setWorkoutType("weight")}
+                className="flex-1"
+              >
+                Weight-based
+              </Button>
+              <Button
+                type="button"
+                variant={workoutType === "time" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setWorkoutType("time")}
+                className="flex-1"
+              >
+                Time-based (Cardio)
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Exercise Name</Label>
             <Input
               id="name"
-              placeholder="e.g., Bench Press"
+              placeholder={workoutType === "weight" ? "e.g., Bench Press" : "e.g., Running"}
               value={formData.name}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
@@ -131,11 +160,13 @@ export function WorkoutForm({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="weight">Weight (kg)</Label>
+              <Label htmlFor="weight">
+                {workoutType === "weight" ? "Weight (kg)" : "Duration (min)"}
+              </Label>
               <Input
                 id="weight"
                 type="number"
-                step="0.5"
+                step={workoutType === "weight" ? "0.5" : "1"}
                 placeholder="0"
                 value={formData.weight}
                 onChange={(e) =>
@@ -174,11 +205,13 @@ export function WorkoutForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="repsPerSet">Reps per Set</Label>
+              <Label htmlFor="repsPerSet">
+                {workoutType === "weight" ? "Reps per Set" : "Duration per Set (sec)"}
+              </Label>
               <Input
                 id="repsPerSet"
                 type="number"
-                placeholder="10"
+                placeholder={workoutType === "weight" ? "10" : "60"}
                 value={formData.repsPerSet}
                 onChange={(e) =>
                   setFormData((prev) => ({

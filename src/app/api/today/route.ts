@@ -17,7 +17,7 @@ export async function GET() {
     todayEnd.setHours(23, 59, 59, 999);
 
     // Fetch all data in parallel
-    const [workouts, cycles, todaySessions] = await Promise.all([
+    const [workouts, cycles, todaySessions, recentSessions] = await Promise.all([
       // All workouts
       prisma.workout.findMany({
         where: { userId: session.user.id },
@@ -43,12 +43,25 @@ export async function GET() {
         },
         include: { workout: true },
       }),
+      // Recent sessions from last 30 days (excluding today)
+      prisma.workoutSession.findMany({
+        where: {
+          userId: session.user.id,
+          date: {
+            lt: todayStart,
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
+        },
+        include: { workout: true },
+        orderBy: { date: "desc" },
+      }),
     ]);
 
     return NextResponse.json({
       workouts,
       cycles,
       todaySessions,
+      recentSessions,
     });
   } catch (error) {
     console.error("Get today data error:", error);

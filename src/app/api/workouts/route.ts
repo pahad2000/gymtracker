@@ -33,12 +33,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, weight, restTime, sets, repsPerSet, notes, intervalDays, scheduleDays, startDate } = body;
+    const { name, workoutType, weight, restTime, sets, repsPerSet, notes, intervalDays, scheduleDays, startDate } = body;
 
     // Create workout first, then generate AI tip asynchronously
     const workout = await prisma.workout.create({
       data: {
         name,
+        workoutType: workoutType || "weight",
         weight: parseFloat(weight),
         restTime: parseInt(restTime),
         sets: parseInt(sets),

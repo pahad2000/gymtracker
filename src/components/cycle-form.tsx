@@ -18,6 +18,7 @@ import type { WorkoutCycle } from "@/types";
 
 type WorkoutFormData = {
   name: string;
+  workoutType: "weight" | "time";
   weight: number;
   restTime: number;
   sets: number;
@@ -71,6 +72,7 @@ export function CycleForm({
   const [editingWorkoutIndex, setEditingWorkoutIndex] = useState<number | null>(null);
   const [workoutFormData, setWorkoutFormData] = useState<WorkoutFormData>({
     name: "",
+    workoutType: "weight",
     weight: 0,
     restTime: 60,
     sets: 3,
@@ -91,6 +93,7 @@ export function CycleForm({
           : format(new Date(), "yyyy-MM-dd"),
         workouts: initialData.workouts?.map((w) => ({
           name: w.name,
+          workoutType: w.workoutType || "weight",
           weight: w.weight,
           restTime: w.restTime,
           sets: w.sets,
@@ -136,6 +139,7 @@ export function CycleForm({
   const handleAddWorkout = () => {
     setWorkoutFormData({
       name: "",
+      workoutType: "weight",
       weight: 0,
       restTime: 60,
       sets: 3,

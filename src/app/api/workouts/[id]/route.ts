@@ -45,7 +45,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, weight, restTime, sets, repsPerSet, notes, intervalDays, scheduleDays, startDate } = body;
+    const { name, workoutType, weight, restTime, sets, repsPerSet, notes, intervalDays, scheduleDays, startDate } = body;
 
     const existingWorkout = await prisma.workout.findFirst({
       where: { id, userId: session.user.id },
@@ -65,6 +65,7 @@ export async function PUT(
       where: { id },
       data: {
         name,
+        ...(workoutType && { workoutType }),
         weight: parseFloat(weight),
         restTime: parseInt(restTime),
         sets: parseInt(sets),
