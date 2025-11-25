@@ -120,14 +120,23 @@ export default function TodayPage() {
         return format(sessionDate, "yyyy-MM-dd") === date;
       });
 
-      for (const session of sessionsForDay) {
+      // Get unique workout IDs (in case there are duplicates on that day)
+      const uniqueWorkoutIds = [...new Set(sessionsForDay.map(s => s.workoutId))];
+
+      // Only create sessions for workouts that don't already have a session today
+      const workoutsToCreate = uniqueWorkoutIds.filter(
+        workoutId => !sessions.some(s => s.workoutId === workoutId)
+      );
+
+      for (const workoutId of workoutsToCreate) {
         await fetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workoutId: session.workoutId }),
+          body: JSON.stringify({ workoutId }),
         });
       }
-      fetchData();
+
+      await fetchData();
     } catch (error) {
       console.error("Failed to create sessions:", error);
     } finally {
@@ -135,15 +144,22 @@ export default function TodayPage() {
     }
   };
 
-  // Group recent sessions by date
-  const sessionsByDate = recentSessions.reduce((acc, session) => {
-    const dateKey = format(new Date(session.date), "yyyy-MM-dd");
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(session);
-    return acc;
-  }, {} as Record<string, WorkoutSession[]>);
+  // Group recent sessions by date (only completed sessions)
+  const sessionsByDate = recentSessions
+    .filter(s => s.completed)
+    .reduce((acc, session) => {
+      const dateKey = format(new Date(session.date), "yyyy-MM-dd");
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+      acc[dateKey].push(session);
+      return acc;
+    }, {} as Record<string, WorkoutSession[]>);
+
+  // Sort dates in descending order and limit to most recent 10 days
+  const sortedDates = Object.keys(sessionsByDate)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    .slice(0, 10);
 
   const updateSession = async (
     sessionId: string,
@@ -222,12 +238,14 @@ export default function TodayPage() {
             </p>
           </div>
 
-          {Object.keys(sessionsByDate).length > 0 ? (
+          {sortedDates.length > 0 ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground">
-                Recent Workout Days
+                Recent Workout Days (Last 10)
               </p>
-              {Object.entries(sessionsByDate).map(([date, daySessions]) => (
+              {sortedDates.map((date) => {
+                const daySessions = sessionsByDate[date];
+                return (
                 <Card key={date} className="hover:bg-muted/50 transition-colors">
                   <CardContent className="p-4">
                     <button
@@ -259,7 +277,8 @@ export default function TodayPage() {
                     </button>
                   </CardContent>
                 </Card>
-              ))}
+              );
+            })}
             </div>
           ) : (
             <div className="text-center py-8">

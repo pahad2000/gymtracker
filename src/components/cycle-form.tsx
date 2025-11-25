@@ -385,6 +385,30 @@ export function CycleForm({
 
                 <div className="space-y-3">
                   <div className="space-y-2">
+                    <Label>Workout Type</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={workoutFormData.workoutType === "weight" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWorkoutFormData((prev) => ({ ...prev, workoutType: "weight" }))}
+                        className="flex-1"
+                      >
+                        Weight-based
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={workoutFormData.workoutType === "time" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWorkoutFormData((prev) => ({ ...prev, workoutType: "time" }))}
+                        className="flex-1"
+                      >
+                        Time-based
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="workout-name">Workout Name</Label>
                     <Input
                       id="workout-name"
@@ -392,18 +416,20 @@ export function CycleForm({
                       onChange={(e) =>
                         setWorkoutFormData((prev) => ({ ...prev, name: e.target.value }))
                       }
-                      placeholder="e.g., Bench Press"
+                      placeholder={workoutFormData.workoutType === "weight" ? "e.g., Bench Press" : "e.g., Running"}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label htmlFor="workout-weight">Weight (kg)</Label>
+                      <Label htmlFor="workout-weight">
+                        {workoutFormData.workoutType === "weight" ? "Weight (kg)" : "Duration (min)"}
+                      </Label>
                       <Input
                         id="workout-weight"
                         type="number"
                         min="0"
-                        step="0.5"
+                        step={workoutFormData.workoutType === "weight" ? "0.5" : "1"}
                         value={workoutFormData.weight}
                         onChange={(e) =>
                           setWorkoutFormData((prev) => ({
@@ -447,11 +473,14 @@ export function CycleForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="workout-reps">Reps per Set</Label>
+                      <Label htmlFor="workout-reps">
+                        {workoutFormData.workoutType === "weight" ? "Reps per Set" : "Duration per Set (sec)"}
+                      </Label>
                       <Input
                         id="workout-reps"
                         type="number"
                         min="1"
+                        placeholder={workoutFormData.workoutType === "weight" ? "10" : "60"}
                         value={workoutFormData.repsPerSet}
                         onChange={(e) =>
                           setWorkoutFormData((prev) => ({

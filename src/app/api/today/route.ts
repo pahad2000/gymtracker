@@ -43,13 +43,14 @@ export async function GET() {
         },
         include: { workout: true },
       }),
-      // Recent sessions from last 30 days (excluding today)
+      // Recent completed sessions from last 60 days (excluding today)
       prisma.workoutSession.findMany({
         where: {
           userId: session.user.id,
+          completed: true,
           date: {
             lt: todayStart,
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
           },
         },
         include: { workout: true },
