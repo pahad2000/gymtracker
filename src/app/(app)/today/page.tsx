@@ -120,11 +120,6 @@ export default function TodayPage() {
         s.id === sessionId ? { ...s, ...data } : s
       )
     );
-    setAllSessions((prev) =>
-      prev.map((s) =>
-        s.id === sessionId ? { ...s, ...data } : s
-      )
-    );
 
     // Only refetch if workout is completed (to get fresh data for next session)
     await fetch(`/api/sessions/${sessionId}`, {
