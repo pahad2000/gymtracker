@@ -31,6 +31,7 @@ type MonthlyStats = {
 type WeightProgress = {
   workoutId: string;
   workoutName: string;
+  workoutType: "weight" | "time";
   data: { session: number; weight: number; date: string }[];
 };
 
@@ -100,7 +101,7 @@ export function StatsCharts({ monthlyStats, weightProgress }: StatsChartsProps) 
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Weight Progress</CardTitle>
+              <CardTitle className="text-base">Workout Progress</CardTitle>
               <Select value={selectedWorkout} onValueChange={setSelectedWorkout}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Select workout" />
@@ -144,7 +145,7 @@ export function StatsCharts({ monthlyStats, weightProgress }: StatsChartsProps) 
                     <Line
                       type="monotone"
                       dataKey="weight"
-                      name="Weight (kg)"
+                      name={selectedWorkoutData.workoutType === "time" ? "Duration (min)" : "Weight (kg)"}
                       stroke="hsl(var(--primary))"
                       strokeWidth={2}
                       dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}

@@ -70,15 +70,17 @@ export function WorkoutList({ workouts, onEdit, onDelete }: WorkoutListProps) {
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold truncate">{workout.name}</h3>
                   <span className="text-primary font-medium shrink-0">
-                    {workout.weight}kg
+                    {workout.weight} {workout.workoutType === "time" ? "min" : "kg"}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                  <span>
-                    {workout.sets} sets × {workout.repsPerSet} reps
-                  </span>
-                  <span>{workout.restTime}s rest</span>
-                </div>
+                {workout.workoutType === "weight" && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                    <span>
+                      {workout.sets} sets × {workout.repsPerSet} reps
+                    </span>
+                    <span>{workout.restTime}s rest</span>
+                  </div>
+                )}
                 <div className="mt-2 text-xs text-muted-foreground/70">
                   {getScheduleText(workout)}
                 </div>

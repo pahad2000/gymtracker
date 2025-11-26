@@ -139,7 +139,7 @@ export function WorkoutPlayer({
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">{workout.name}</CardTitle>
             <span className="text-2xl font-bold text-primary">
-              {workout.weight} kg
+              {workout.weight} {workout.workoutType === "time" ? "min" : "kg"}
             </span>
           </div>
         </CardHeader>
@@ -248,8 +248,10 @@ export function WorkoutPlayer({
               >
                 <span className="font-medium">{session.workout.name}</span>
                 <span className="text-muted-foreground text-sm">
-                  {session.workout.sets} x {session.workout.repsPerSet} @{" "}
-                  {session.workout.weight}kg
+                  {session.workout.workoutType === "time"
+                    ? `${session.workout.weight} min`
+                    : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
+                  }
                 </span>
               </div>
             ))}

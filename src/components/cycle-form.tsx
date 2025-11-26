@@ -334,7 +334,10 @@ export function CycleForm({
                     <div className="flex-1">
                       <div className="text-sm font-medium">{workout.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {workout.sets}×{workout.repsPerSet} @ {workout.weight}kg
+                        {workout.workoutType === "time"
+                          ? `${workout.weight} min`
+                          : `${workout.sets}×${workout.repsPerSet} @ ${workout.weight}kg`
+                        }
                       </div>
                     </div>
                     <div className="flex gap-1">

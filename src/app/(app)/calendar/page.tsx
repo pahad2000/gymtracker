@@ -135,8 +135,10 @@ export default function CalendarPage() {
                       <div>
                         <p className="font-medium">{workout.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {workout.sets} x {workout.repsPerSet} @ {workout.weight}
-                          kg
+                          {workout.workoutType === "time"
+                            ? `${workout.weight} min`
+                            : `${workout.sets} x ${workout.repsPerSet} @ ${workout.weight} kg`
+                          }
                         </p>
                       </div>
                     </div>

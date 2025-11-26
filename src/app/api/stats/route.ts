@@ -68,6 +68,7 @@ export async function GET() {
       return {
         workoutId: workout.id,
         workoutName: workout.name,
+        workoutType: workout.workoutType,
         data: workoutSessions.map((s, index) => ({
           session: index + 1,
           weight: s.weightUsed || workout.weight,
