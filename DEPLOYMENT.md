@@ -8,7 +8,7 @@ This guide walks you through deploying GymTracker using free services.
 |-----------|---------|------------------|
 | App Hosting | Vercel | Unlimited projects, 100GB bandwidth |
 | Database | Neon | 0.5 GB storage, 1 project |
-| AI Tips | Disabled in production | N/A (Ollama is local-only) |
+| AI Tips | Google Gemini | Free tier available |
 
 **Total Cost: $0/month**
 
@@ -96,6 +96,7 @@ Before deploying, add these environment variables:
 |----------|-------|
 | `DATABASE_URL` | Your Neon connection string |
 | `AUTH_SECRET` | Generate with: `openssl rand -base64 32` |
+| `GEMINI_API_KEY` | (Optional) Your Google Gemini API key |
 
 To add them:
 1. Expand "Environment Variables" section
@@ -149,26 +150,32 @@ npx prisma migrate deploy
 
 ## About AI Tips in Production
 
-The Ollama AI tips feature **won't work in production** because:
-- Ollama runs locally on your computer
-- Vercel's servers don't have Ollama installed
+The app uses **Google Gemini API** for AI-powered workout tips:
+- Free tier available (15 requests per minute)
+- Fast inference with Gemini 1.5 Flash
+- Provides exercise form tips and advice
 
-**The app handles this gracefully:**
-- If Ollama is unavailable, a default tip is shown
+**To enable AI tips:**
+1. Get a free API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Add `GEMINI_API_KEY` to your Vercel environment variables
+
+**The app handles missing API keys gracefully:**
+- If no API key is provided, fallback tips are shown
 - No errors or crashes
+- Common exercises have built-in tips
 
-### Future Options for AI in Production
+### Alternative AI Providers
 
-If you want real AI tips in production, consider:
+If you prefer different providers:
 
 1. **OpenAI API** (~$0.002 per tip)
-   - Modify `src/lib/ollama.ts` to use OpenAI instead
+   - Modify `src/lib/ai.ts` to use OpenAI instead
 
-2. **Replicate** (free tier available)
-   - Hosts open-source models
+2. **Anthropic Claude** (pay-as-you-go)
+   - Good for detailed form explanations
 
 3. **Groq** (free tier)
-   - Very fast inference
+   - Very fast inference with open models
 
 ---
 

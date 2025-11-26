@@ -135,7 +135,6 @@ model User {
   email         String    @unique
   name          String?
   password      String              // bcrypt hashed
-  adaptiveMode  Boolean   @default(false)
   themeMode     String    @default("auto")  // auto, light, dark
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -168,10 +167,11 @@ model WorkoutCycle {
 model Workout {
   id            String    @id @default(cuid())
   name          String
-  weight        Float
-  restTime      Int
-  sets          Int
-  repsPerSet    Int
+  workoutType   String    @default("weight")  // "weight" or "time"
+  weight        Float     // Weight (kg) or Duration (minutes)
+  restTime      Int       // Only for weight-based workouts
+  sets          Int       // Only for weight-based workouts
+  repsPerSet    Int       // Only for weight-based workouts
   notes         String?
   aiTip         String?   @db.Text
   intervalDays  Int?
@@ -275,12 +275,15 @@ function getCycleWorkoutForDate(cycle, date) {
 }
 ```
 
-### 2. Adaptive Mode
-When enabled, incomplete workouts block future scheduled workouts:
-- Completion rate = completed / total scheduled to date
-- Encourages consistency
+### 2. Workout Types
+Two types of workouts supported:
+- **Weight-based**: Traditional strength training with weight, sets, reps, and rest time
+- **Time-based (Cardio)**: Duration-focused activities like running or cycling
 
-### 3. Light/Dark Theme
+### 3. Session Selection from Past Days
+When no workouts are scheduled for today, users can select complete sessions from any past day to repeat those workouts. All past completed session days are shown.
+
+### 4. Light/Dark Theme
 Three modes available:
 - **Auto:** Light 7am-7pm, Dark 7pm-7am
 - **Light:** Always light
@@ -288,12 +291,12 @@ Three modes available:
 
 Managed via `ThemeProvider` context.
 
-### 4. Manual Workout Ordering
+### 5. Manual Workout Ordering
 Reorder workouts on the Today page:
 - Persists to `displayOrder` field
 - Respects order across sessions
 
-### 5. AI Workout Tips
+### 6. AI Workout Tips
 Generated using Google Gemini API:
 - Async generation (doesn't block workout creation)
 - Fallback tips for common exercises

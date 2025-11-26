@@ -14,6 +14,12 @@ Tired of forgetting your workout schedule? Losing track of your sets? Wondering 
 
 ## Features
 
+### 💪 Weight & Cardio Tracking
+Track both strength training (weight, sets, reps) and cardio workouts (duration-based). One app for all your fitness needs.
+
+### 🔄 Workout Cycles
+Create rotating workout programs like Push/Pull/Legs. The app automatically cycles through your workouts on schedule.
+
 ### 📅 Smart Scheduling
 Set workouts for specific days or intervals. Your calendar shows exactly what's planned—no mental math required.
 
@@ -21,10 +27,10 @@ Set workouts for specific days or intervals. Your calendar shows exactly what's 
 Complete a set, and the timer starts automatically. Pause, skip, or let it count down. Stay in the zone.
 
 ### 🤖 AI-Powered Tips
-Get personalized form tips and advice for every exercise. Like having a coach in your pocket.
+Get personalized form tips and advice for every exercise powered by Google Gemini. Like having a coach in your pocket.
 
 ### 📊 Progress Analytics
-Track your completed workouts, see your consistency rate, and watch your weights climb over time with beautiful charts.
+Track your completed workouts, see your consistency rate, and watch your progress climb over time with beautiful charts.
 
 ### 📱 Mobile-First Design
 Designed for the gym floor. Big buttons, clear text, works perfectly on your phone.
@@ -37,11 +43,13 @@ No ads. No tracking. Self-hosted option available. Your workout data stays yours
 ## How It Works
 
 ```
-1. Add your workouts (Bench Press, Squats, etc.)
-2. Set your schedule (Mon/Wed/Fri or every 2 days)
-3. Hit "Start Workout" when it's gym time
-4. Follow along: complete sets, rest, repeat
-5. Watch your progress grow
+1. Add your workouts (Bench Press, Running, etc.)
+2. Choose workout type (weight-based or cardio)
+3. Set your schedule (Mon/Wed/Fri or every 2 days)
+4. Create cycles for rotating programs (optional)
+5. Hit "Start Workout" when it's gym time
+6. Follow along: complete sets, rest, repeat
+7. Watch your progress grow
 ```
 
 ---
@@ -50,8 +58,10 @@ No ads. No tracking. Self-hosted option available. Your workout data stays yours
 
 - 🏋️ Gym beginners who need structure
 - 💪 Intermediate lifters tracking progressive overload
+- 🏃 Runners and cardio enthusiasts tracking duration
 - 📈 Anyone who wants to see their progress over time
 - 🧠 People who forget what weight they used last time
+- 🔄 Athletes following structured rotation programs
 
 ---
 

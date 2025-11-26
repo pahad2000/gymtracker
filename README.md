@@ -1,36 +1,157 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GymTracker
+
+A modern, minimalist workout tracking application built with Next.js, PostgreSQL, and AI-powered tips.
+
+## Features
+
+- **Smart Workout Management**: Create weight-based and cardio workouts with flexible scheduling
+- **Workout Cycles**: Group workouts into rotating cycles (e.g., Push/Pull/Legs)
+- **Built-in Rest Timer**: Automatic countdown between sets
+- **AI-Powered Tips**: Get exercise form tips powered by Google Gemini
+- **Progress Analytics**: Track completion rates, total sets/reps, and weight progression
+- **Interactive Calendar**: Visualize your workout schedule
+- **Dark/Light Theme**: Auto, light, or dark theme modes
+- **Mobile-First**: Optimized for use in the gym
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript 5
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js 5
+- **Styling**: Tailwind CSS 4
+- **UI Components**: Radix UI + shadcn/ui
+- **Charts**: Recharts
+- **AI**: Google Gemini 1.5 Flash
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ and npm
+- PostgreSQL database (or use Neon for cloud PostgreSQL)
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/gymtracker.git
+cd gymtracker
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+```bash
+cp .env.example .env
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Edit `.env` and add:
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/gymtracker"
+AUTH_SECRET="your-secret-key-at-least-32-chars"
+GEMINI_API_KEY="your-google-gemini-api-key"  # Optional
+```
 
-## Learn More
+Generate `AUTH_SECRET` with:
+```bash
+openssl rand -base64 32
+```
 
-To learn more about Next.js, take a look at the following resources:
+4. Set up the database:
+```bash
+npx prisma generate
+npx prisma migrate dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. Run the development server:
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+6. Open [http://localhost:3000](http://localhost:3000)
 
-## Deploy on Vercel
+## Key Features Explained
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Workout Types
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Weight-based**: Track weight, sets, reps, and rest time (e.g., Bench Press)
+- **Time-based (Cardio)**: Track duration for cardio exercises (e.g., Running, Cycling)
+
+### Scheduling
+
+Two scheduling modes:
+- **Specific Days**: Schedule for certain weekdays (Mon, Wed, Fri)
+- **Interval**: Every N days from a start date
+
+### Workout Cycles
+
+Group multiple workouts to rotate through on a schedule. Perfect for:
+- Push/Pull/Legs splits
+- Upper/Lower body rotations
+- Any custom rotation program
+
+### Session Selection
+
+When no workouts are scheduled for today, select complete sessions from any past day to repeat those workouts.
+
+## Project Structure
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # Login/register pages
+│   ├── (app)/             # Protected app pages
+│   └── api/               # API routes
+├── components/
+│   ├── ui/                # Reusable UI primitives
+│   └── *.tsx              # Feature components
+├── lib/
+│   ├── auth.ts            # NextAuth configuration
+│   ├── ai.ts              # Gemini API integration
+│   ├── prisma.ts          # Database client
+│   └── utils.ts           # Utility functions
+└── types/                 # TypeScript type definitions
+```
+
+## Documentation
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Technical documentation
+- [GUIDE.md](./GUIDE.md) - Beginner-friendly guide
+- [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) - System design analysis
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
+
+## Scripts
+
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm start            # Start production server
+npm run lint         # Run linter
+
+npx prisma studio    # Open database GUI
+npx prisma migrate dev  # Create/apply migrations
+```
+
+## Deployment
+
+### Deploy to Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Import project to [Vercel](https://vercel.com)
+3. Add environment variables
+4. Deploy
+5. Run migrations against production database
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
