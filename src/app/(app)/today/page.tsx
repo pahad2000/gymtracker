@@ -144,22 +144,19 @@ export default function TodayPage() {
     }
   };
 
-  // Group recent sessions by date (only completed sessions)
-  const sessionsByDate = recentSessions
-    .filter(s => s.completed)
-    .reduce((acc, session) => {
-      const dateKey = format(new Date(session.date), "yyyy-MM-dd");
-      if (!acc[dateKey]) {
-        acc[dateKey] = [];
-      }
-      acc[dateKey].push(session);
-      return acc;
-    }, {} as Record<string, WorkoutSession[]>);
+  // Group sessions by date (only completed sessions, already filtered in API)
+  const sessionsByDate = recentSessions.reduce((acc, session) => {
+    const dateKey = format(new Date(session.date), "yyyy-MM-dd");
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(session);
+    return acc;
+  }, {} as Record<string, WorkoutSession[]>);
 
-  // Sort dates in descending order and limit to most recent 10 days
+  // Sort dates in descending order (most recent first) - show all available days
   const sortedDates = Object.keys(sessionsByDate)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-    .slice(0, 10);
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
   const updateSession = async (
     sessionId: string,
@@ -241,7 +238,7 @@ export default function TodayPage() {
           {sortedDates.length > 0 ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground">
-                Recent Workout Days (Last 10)
+                Past Workout Days
               </p>
               {sortedDates.map((date) => {
                 const daySessions = sessionsByDate[date];

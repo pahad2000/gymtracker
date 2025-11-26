@@ -81,9 +81,10 @@ export function WorkoutForm({
         name: formData.name,
         workoutType,
         weight: parseFloat(formData.weight),
-        restTime: parseInt(formData.restTime),
-        sets: parseInt(formData.sets),
-        repsPerSet: parseInt(formData.repsPerSet),
+        // For time-based workouts, use defaults for unused fields
+        restTime: workoutType === "weight" ? parseInt(formData.restTime) : 0,
+        sets: workoutType === "weight" ? parseInt(formData.sets) : 1,
+        repsPerSet: workoutType === "weight" ? parseInt(formData.repsPerSet) : 1,
         notes: formData.notes || undefined,
         intervalDays: scheduleType === "interval" ? parseInt(formData.intervalDays) : null,
         scheduleDays: scheduleType === "days" ? formData.scheduleDays : [],
@@ -158,71 +159,89 @@ export function WorkoutForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {workoutType === "weight" ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="weight">Weight (kg)</Label>
+                  <Input
+                    id="weight"
+                    type="number"
+                    step="0.5"
+                    placeholder="0"
+                    value={formData.weight}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, weight: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="restTime">Rest Time (sec)</Label>
+                  <Input
+                    id="restTime"
+                    type="number"
+                    placeholder="60"
+                    value={formData.restTime}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, restTime: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sets">Sets</Label>
+                  <Input
+                    id="sets"
+                    type="number"
+                    placeholder="3"
+                    value={formData.sets}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, sets: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="repsPerSet">Reps per Set</Label>
+                  <Input
+                    id="repsPerSet"
+                    type="number"
+                    placeholder="10"
+                    value={formData.repsPerSet}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        repsPerSet: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
             <div className="space-y-2">
-              <Label htmlFor="weight">
-                {workoutType === "weight" ? "Weight (kg)" : "Duration (min)"}
-              </Label>
+              <Label htmlFor="weight">Duration (minutes)</Label>
               <Input
                 id="weight"
                 type="number"
-                step={workoutType === "weight" ? "0.5" : "1"}
-                placeholder="0"
+                step="1"
+                placeholder="30"
                 value={formData.weight}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, weight: e.target.value }))
                 }
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Total duration for this cardio workout
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="restTime">Rest Time (sec)</Label>
-              <Input
-                id="restTime"
-                type="number"
-                placeholder="60"
-                value={formData.restTime}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, restTime: e.target.value }))
-                }
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="sets">Sets</Label>
-              <Input
-                id="sets"
-                type="number"
-                placeholder="3"
-                value={formData.sets}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, sets: e.target.value }))
-                }
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="repsPerSet">
-                {workoutType === "weight" ? "Reps per Set" : "Duration per Set (sec)"}
-              </Label>
-              <Input
-                id="repsPerSet"
-                type="number"
-                placeholder={workoutType === "weight" ? "10" : "60"}
-                value={formData.repsPerSet}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    repsPerSet: e.target.value,
-                  }))
-                }
-                required
-              />
-            </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes (optional)</Label>

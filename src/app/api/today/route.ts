@@ -43,18 +43,18 @@ export async function GET() {
         },
         include: { workout: true },
       }),
-      // Recent completed sessions from last 60 days (excluding today)
+      // All completed sessions from the past (excluding today)
       prisma.workoutSession.findMany({
         where: {
           userId: session.user.id,
           completed: true,
           date: {
             lt: todayStart,
-            gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
           },
         },
         include: { workout: true },
         orderBy: { date: "desc" },
+        take: 200, // Limit to last 200 sessions for performance
       }),
     ]);
 
