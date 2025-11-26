@@ -15,6 +15,7 @@ type Stats = {
   weightProgress: {
     workoutId: string;
     workoutName: string;
+    workoutType: "weight" | "time";
     data: { session: number; weight: number; date: string }[];
   }[];
 };
