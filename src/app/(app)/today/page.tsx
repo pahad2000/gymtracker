@@ -245,7 +245,8 @@ export default function TodayPage() {
     sessions.some((s) => s.workoutId === workout.id)
   );
 
-  const sessionsToShow = sessions.filter((s) => !s.completed);
+  const hasIncompleteSession = sessions.some((s) => !s.completed);
+  const allSessionsComplete = sessions.length > 0 && sessions.every((s) => s.completed);
 
   return (
     <div className="space-y-6">
@@ -313,7 +314,7 @@ export default function TodayPage() {
             </div>
           )}
         </div>
-      ) : sessionsToShow.length === 0 && !hasAllSessions && scheduledWorkouts.length > 0 ? (
+      ) : !hasIncompleteSession && !hasAllSessions && scheduledWorkouts.length > 0 ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground">
@@ -395,20 +396,20 @@ export default function TodayPage() {
             </div>
           )}
         </div>
-      ) : sessionsToShow.length > 0 ? (
+      ) : hasIncompleteSession ? (
         <WorkoutPlayer
-          sessions={sessionsToShow}
+          sessions={sessions}
           onUpdateSession={updateSession}
           onRegenerateTip={regenerateTip}
         />
-      ) : (
+      ) : allSessionsComplete ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">All workouts completed!</p>
           <p className="text-sm text-muted-foreground/70 mt-1">
             Great job! Come back tomorrow for more.
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

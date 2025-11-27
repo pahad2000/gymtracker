@@ -28,16 +28,30 @@ export function WorkoutPlayer({
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
 
+  // Find first incomplete session on mount
+  useEffect(() => {
+    const firstIncompleteIndex = sessions.findIndex((s) => !s.completed);
+    if (firstIncompleteIndex !== -1) {
+      setCurrentSessionIndex(firstIncompleteIndex);
+    }
+  }, [sessions]);
+
   const currentSession = sessions[currentSessionIndex];
   const workout = currentSession?.workout;
 
-  // Reset index when sessions array changes
+  // Skip to next incomplete session if current is completed
   useEffect(() => {
-    if (sessions.length > 0 && currentSessionIndex >= sessions.length) {
-      setCurrentSessionIndex(0);
-      setCurrentSet(1);
+    if (currentSession?.completed) {
+      const nextIncompleteIndex = sessions.findIndex(
+        (s, idx) => idx > currentSessionIndex && !s.completed
+      );
+      if (nextIncompleteIndex !== -1) {
+        setCurrentSessionIndex(nextIncompleteIndex);
+        setCurrentSet(1);
+        setIsResting(false);
+      }
     }
-  }, [sessions.length, currentSessionIndex]);
+  }, [currentSession?.completed, currentSessionIndex, sessions]);
 
   // Rest timer
   useEffect(() => {
@@ -74,9 +88,12 @@ export function WorkoutPlayer({
       });
 
       if (isWorkoutComplete) {
-        // Move to next workout
-        if (currentSessionIndex < sessions.length - 1) {
-          setCurrentSessionIndex((prev) => prev + 1);
+        // Move to next incomplete workout
+        const nextIncompleteIndex = sessions.findIndex(
+          (s, idx) => idx > currentSessionIndex && !s.completed
+        );
+        if (nextIncompleteIndex !== -1) {
+          setCurrentSessionIndex(nextIncompleteIndex);
           setCurrentSet(1);
           setIsResting(false);
         }
@@ -106,9 +123,12 @@ export function WorkoutPlayer({
         completed: true,
       });
 
-      // Move to next workout
-      if (currentSessionIndex < sessions.length - 1) {
-        setCurrentSessionIndex((prev) => prev + 1);
+      // Move to next incomplete workout
+      const nextIncompleteIndex = sessions.findIndex(
+        (s, idx) => idx > currentSessionIndex && !s.completed
+      );
+      if (nextIncompleteIndex !== -1) {
+        setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
       }
     } finally {
@@ -144,9 +164,12 @@ export function WorkoutPlayer({
     );
   }
 
-  const progress = (currentSession.setsCompleted / workout.sets) * 100;
-  const overallProgress =
-    ((currentSessionIndex + progress / 100) / sessions.length) * 100;
+  // Calculate overall progress based on completed sessions + current progress
+  const completedCount = sessions.filter((s) => s.completed).length;
+  const currentProgress = currentSession ? (currentSession.setsCompleted / workout.sets) : 0;
+  const overallProgress = sessions.length > 0
+    ? ((completedCount + currentProgress) / sessions.length) * 100
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -155,7 +178,7 @@ export function WorkoutPlayer({
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Overall Progress</span>
           <span className="font-medium">
-            {currentSessionIndex + 1} / {sessions.length} workouts
+            {completedCount} / {sessions.length} workouts
           </span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -289,29 +312,36 @@ export function WorkoutPlayer({
       </Card>
 
       {/* Upcoming workouts */}
-      {sessions.length > 1 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-muted-foreground">
-            Up Next
-          </h4>
+      {(() => {
+        const upcomingWorkouts = sessions
+          .slice(currentSessionIndex + 1)
+          .filter((s) => !s.completed)
+          .slice(0, 2);
+
+        return upcomingWorkouts.length > 0 && (
           <div className="space-y-2">
-            {sessions.slice(currentSessionIndex + 1, currentSessionIndex + 3).map((session) => (
-              <div
-                key={session.id}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
-              >
-                <span className="font-medium">{session.workout.name}</span>
-                <span className="text-muted-foreground text-sm">
-                  {session.workout.workoutType === "time"
-                    ? `${session.workout.weight} min`
-                    : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
-                  }
-                </span>
-              </div>
-            ))}
+            <h4 className="text-sm font-medium text-muted-foreground">
+              Up Next
+            </h4>
+            <div className="space-y-2">
+              {upcomingWorkouts.map((session) => (
+                <div
+                  key={session.id}
+                  className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
+                >
+                  <span className="font-medium">{session.workout.name}</span>
+                  <span className="text-muted-foreground text-sm">
+                    {session.workout.workoutType === "time"
+                      ? `${session.workout.weight} min`
+                      : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
+                    }
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
