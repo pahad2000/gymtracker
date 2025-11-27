@@ -26,9 +26,18 @@ export function WorkoutPlayer({
   const [isResting, setIsResting] = useState(false);
   const [restTimeLeft, setRestTimeLeft] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const currentSession = sessions[currentSessionIndex];
   const workout = currentSession?.workout;
+
+  // Reset index when sessions array changes
+  useEffect(() => {
+    if (sessions.length > 0 && currentSessionIndex >= sessions.length) {
+      setCurrentSessionIndex(0);
+      setCurrentSet(1);
+    }
+  }, [sessions.length, currentSessionIndex]);
 
   // Rest timer
   useEffect(() => {
@@ -49,32 +58,63 @@ export function WorkoutPlayer({
   }, [isResting, isTimerActive, restTimeLeft]);
 
   const completeSet = useCallback(async () => {
-    if (!currentSession || !workout) return;
+    if (!currentSession || !workout || isCompleting) return;
 
-    const newSetsCompleted = currentSession.setsCompleted + 1;
-    const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
-    const isWorkoutComplete = newSetsCompleted >= workout.sets;
+    setIsCompleting(true);
 
-    await onUpdateSession(currentSession.id, {
-      setsCompleted: newSetsCompleted,
-      repsPerSet: newRepsPerSet,
-      completed: isWorkoutComplete,
-    });
+    try {
+      const newSetsCompleted = currentSession.setsCompleted + 1;
+      const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
+      const isWorkoutComplete = newSetsCompleted >= workout.sets;
 
-    if (isWorkoutComplete) {
+      await onUpdateSession(currentSession.id, {
+        setsCompleted: newSetsCompleted,
+        repsPerSet: newRepsPerSet,
+        completed: isWorkoutComplete,
+      });
+
+      if (isWorkoutComplete) {
+        // Move to next workout
+        if (currentSessionIndex < sessions.length - 1) {
+          setCurrentSessionIndex((prev) => prev + 1);
+          setCurrentSet(1);
+          setIsResting(false);
+        }
+      } else {
+        // Start rest timer (only for weight-based workouts)
+        if (workout.workoutType !== "time") {
+          setCurrentSet((prev) => prev + 1);
+          setRestTimeLeft(workout.restTime);
+          setIsResting(true);
+          setIsTimerActive(true);
+        }
+      }
+    } finally {
+      setIsCompleting(false);
+    }
+  }, [currentSession, workout, currentSessionIndex, sessions.length, onUpdateSession, isCompleting]);
+
+  const completeWorkout = useCallback(async () => {
+    if (!currentSession || isCompleting) return;
+
+    setIsCompleting(true);
+
+    try {
+      await onUpdateSession(currentSession.id, {
+        setsCompleted: 1,
+        repsPerSet: [1],
+        completed: true,
+      });
+
       // Move to next workout
       if (currentSessionIndex < sessions.length - 1) {
         setCurrentSessionIndex((prev) => prev + 1);
         setCurrentSet(1);
       }
-    } else {
-      // Start rest timer
-      setCurrentSet((prev) => prev + 1);
-      setRestTimeLeft(workout.restTime);
-      setIsResting(true);
-      setIsTimerActive(true);
+    } finally {
+      setIsCompleting(false);
     }
-  }, [currentSession, workout, currentSessionIndex, sessions.length, onUpdateSession]);
+  }, [currentSession, currentSessionIndex, sessions.length, onUpdateSession, isCompleting]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -144,33 +184,35 @@ export function WorkoutPlayer({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Set progress */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>
-                Set {Math.min(currentSet, workout.sets)} of {workout.sets}
-              </span>
-              <span>{workout.repsPerSet} reps</span>
+          {/* Set progress - only for weight-based workouts */}
+          {workout.workoutType !== "time" && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>
+                  Set {Math.min(currentSet, workout.sets)} of {workout.sets}
+                </span>
+                <span>{workout.repsPerSet} reps</span>
+              </div>
+              <div className="flex gap-2">
+                {Array.from({ length: workout.sets }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex-1 h-3 rounded-full transition-all",
+                      i < currentSession.setsCompleted
+                        ? "bg-emerald-500"
+                        : i === currentSession.setsCompleted
+                        ? "bg-primary animate-pulse"
+                        : "bg-muted"
+                    )}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2">
-              {Array.from({ length: workout.sets }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex-1 h-3 rounded-full transition-all",
-                    i < currentSession.setsCompleted
-                      ? "bg-emerald-500"
-                      : i === currentSession.setsCompleted
-                      ? "bg-primary animate-pulse"
-                      : "bg-muted"
-                  )}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Rest timer or action button */}
-          {isResting ? (
+          {isResting && workout.workoutType !== "time" ? (
             <div className="text-center space-y-4">
               <div className="text-4xl font-bold tabular-nums">
                 {formatDuration(restTimeLeft)}
@@ -199,17 +241,29 @@ export function WorkoutPlayer({
                 </Button>
               </div>
             </div>
-          ) : (
-            <Button
-              onClick={completeSet}
-              size="lg"
-              variant="success"
-              className="w-full h-14 text-lg"
-            >
-              <Check className="h-5 w-5 mr-2" />
-              Complete Set {currentSet}
-            </Button>
-          )}
+          ) : !isCompleting ? (
+            workout.workoutType === "time" ? (
+              <Button
+                onClick={completeWorkout}
+                size="lg"
+                variant="success"
+                className="w-full h-14 text-lg"
+              >
+                <Check className="h-5 w-5 mr-2" />
+                Complete Workout
+              </Button>
+            ) : (
+              <Button
+                onClick={completeSet}
+                size="lg"
+                variant="success"
+                className="w-full h-14 text-lg"
+              >
+                <Check className="h-5 w-5 mr-2" />
+                Complete Set {currentSet}
+              </Button>
+            )
+          ) : null}
 
           {/* AI Tip */}
           {workout.aiTip && (
