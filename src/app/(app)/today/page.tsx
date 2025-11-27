@@ -18,6 +18,7 @@ export default function TodayPage() {
   const [creating, setCreating] = useState(false);
   const [creatingCustom, setCreatingCustom] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const today = new Date();
 
@@ -205,6 +206,33 @@ export default function TodayPage() {
     fetchData();
   };
 
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+    const newWorkouts = [...scheduledWorkouts];
+    const [draggedWorkout] = newWorkouts.splice(draggedIndex, 1);
+    newWorkouts.splice(dropIndex, 0, draggedWorkout);
+
+    setDraggedIndex(null);
+
+    // Save the new order
+    await fetch("/api/workouts/reorder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workoutIds: newWorkouts.map((w) => w.id) }),
+    });
+    fetchData();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -307,28 +335,42 @@ export default function TodayPage() {
                 {scheduledWorkouts.map((workout, index) => (
                   <div
                     key={workout.id}
-                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl"
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className={`flex items-center gap-3 p-3 rounded-xl cursor-move transition-all ${
+                      draggedIndex === index
+                        ? "opacity-50 bg-muted"
+                        : "bg-muted/50 hover:bg-muted"
+                    }`}
                   >
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
                     <span className="flex-1 font-medium">{workout.name}</span>
-                    <div className="flex gap-1">
+                    <div className="flex gap-2 shrink-0">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => moveWorkout(index, "up")}
+                        className="h-10 w-10 touch-manipulation"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          moveWorkout(index, "up");
+                        }}
                         disabled={index === 0}
                       >
-                        <ChevronUp className="h-4 w-4" />
+                        <ChevronUp className="h-5 w-5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => moveWorkout(index, "down")}
+                        className="h-10 w-10 touch-manipulation"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          moveWorkout(index, "down");
+                        }}
                         disabled={index === scheduledWorkouts.length - 1}
                       >
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-5 w-5" />
                       </Button>
                     </div>
                   </div>
