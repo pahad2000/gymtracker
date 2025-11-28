@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw } from "lucide-react";
+import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, ChevronUp, ChevronDown, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDuration } from "@/lib/utils";
@@ -14,12 +14,16 @@ interface WorkoutPlayerProps {
     data: { setsCompleted?: number; repsPerSet?: number[]; completed?: boolean }
   ) => Promise<void>;
   onRegenerateTip: (workoutId: string) => Promise<void>;
+  recentSessions?: WorkoutSession[];
+  onReorderSessions?: (sessionIds: string[]) => Promise<void>;
 }
 
 export function WorkoutPlayer({
   sessions,
   onUpdateSession,
   onRegenerateTip,
+  recentSessions = [],
+  onReorderSessions,
 }: WorkoutPlayerProps) {
   const [currentSessionIndex, setCurrentSessionIndex] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
@@ -27,6 +31,8 @@ export function WorkoutPlayer({
   const [restTimeLeft, setRestTimeLeft] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [reorderMode, setReorderMode] = useState(false);
 
   // Find first incomplete session on mount
   useEffect(() => {
@@ -71,58 +77,50 @@ export function WorkoutPlayer({
     return () => clearInterval(interval);
   }, [isResting, isTimerActive, restTimeLeft]);
 
+  // Check progress against recent sessions
+  const checkProgress = useCallback((workoutId: string, currentWeight: number) => {
+    const previousSessions = recentSessions
+      .filter((s) => s.workoutId === workoutId && s.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (previousSessions.length === 0) {
+      setProgressMessage("🎉 First time completing this workout! Great job!");
+      setTimeout(() => setProgressMessage(null), 5000);
+      return;
+    }
+
+    const lastSession = previousSessions[0];
+    const lastWeight = lastSession.weightUsed || lastSession.workout.weight;
+
+    if (currentWeight > lastWeight) {
+      const increase = currentWeight - lastWeight;
+      setProgressMessage(`💪 Progress! +${increase.toFixed(1)}kg from last time!`);
+    } else if (currentWeight === lastWeight) {
+      setProgressMessage("✨ Same weight as last time. Consider increasing next session!");
+    } else {
+      setProgressMessage("📊 Tracking your progress...");
+    }
+
+    setTimeout(() => setProgressMessage(null), 5000);
+  }, [recentSessions]);
+
   const completeSet = useCallback(async () => {
     if (!currentSession || !workout || isCompleting) return;
 
     setIsCompleting(true);
 
-    try {
-      const newSetsCompleted = currentSession.setsCompleted + 1;
-      const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
-      const isWorkoutComplete = newSetsCompleted >= workout.sets;
+    const newSetsCompleted = currentSession.setsCompleted + 1;
+    const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
+    const isWorkoutComplete = newSetsCompleted >= workout.sets;
 
-      await onUpdateSession(currentSession.id, {
-        setsCompleted: newSetsCompleted,
-        repsPerSet: newRepsPerSet,
-        completed: isWorkoutComplete,
-      });
-
-      if (isWorkoutComplete) {
-        // Move to next incomplete workout
-        const nextIncompleteIndex = sessions.findIndex(
-          (s, idx) => idx > currentSessionIndex && !s.completed
-        );
-        if (nextIncompleteIndex !== -1) {
-          setCurrentSessionIndex(nextIncompleteIndex);
-          setCurrentSet(1);
-          setIsResting(false);
-        }
-      } else {
-        // Start rest timer (only for weight-based workouts)
-        if (workout.workoutType !== "time") {
-          setCurrentSet((prev) => prev + 1);
-          setRestTimeLeft(workout.restTime);
-          setIsResting(true);
-          setIsTimerActive(true);
-        }
-      }
-    } finally {
-      setIsCompleting(false);
+    // Check progress when workout is complete
+    if (isWorkoutComplete) {
+      const currentWeight = currentSession.weightUsed || workout.weight;
+      checkProgress(workout.id, currentWeight);
     }
-  }, [currentSession, workout, currentSessionIndex, sessions.length, onUpdateSession, isCompleting]);
 
-  const completeWorkout = useCallback(async () => {
-    if (!currentSession || isCompleting) return;
-
-    setIsCompleting(true);
-
-    try {
-      await onUpdateSession(currentSession.id, {
-        setsCompleted: 1,
-        repsPerSet: [1],
-        completed: true,
-      });
-
+    // Immediately update UI before API call for instant feedback
+    if (isWorkoutComplete) {
       // Move to next incomplete workout
       const nextIncompleteIndex = sessions.findIndex(
         (s, idx) => idx > currentSessionIndex && !s.completed
@@ -130,11 +128,60 @@ export function WorkoutPlayer({
       if (nextIncompleteIndex !== -1) {
         setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
+        setIsResting(false);
       }
+    } else {
+      // Start rest timer immediately (only for weight-based workouts)
+      if (workout.workoutType !== "time") {
+        setCurrentSet((prev) => prev + 1);
+        setRestTimeLeft(workout.restTime);
+        setIsResting(true);
+        setIsTimerActive(true);
+      }
+    }
+
+    // Update API in background
+    try {
+      await onUpdateSession(currentSession.id, {
+        setsCompleted: newSetsCompleted,
+        repsPerSet: newRepsPerSet,
+        completed: isWorkoutComplete,
+      });
     } finally {
       setIsCompleting(false);
     }
-  }, [currentSession, currentSessionIndex, sessions.length, onUpdateSession, isCompleting]);
+  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, isCompleting, checkProgress]);
+
+  const completeWorkout = useCallback(async () => {
+    if (!currentSession || isCompleting) return;
+
+    const workout = currentSession.workout;
+    setIsCompleting(true);
+
+    // Check progress for time-based workouts
+    const currentDuration = currentSession.duration || workout.weight;
+    checkProgress(workout.id, currentDuration);
+
+    // Immediately update UI before API call for instant feedback
+    const nextIncompleteIndex = sessions.findIndex(
+      (s, idx) => idx > currentSessionIndex && !s.completed
+    );
+    if (nextIncompleteIndex !== -1) {
+      setCurrentSessionIndex(nextIncompleteIndex);
+      setCurrentSet(1);
+    }
+
+    // Update API in background
+    try {
+      await onUpdateSession(currentSession.id, {
+        setsCompleted: 1,
+        repsPerSet: [1],
+        completed: true,
+      });
+    } finally {
+      setIsCompleting(false);
+    }
+  }, [currentSession, currentSessionIndex, sessions, onUpdateSession, isCompleting, checkProgress]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -144,6 +191,24 @@ export function WorkoutPlayer({
 
   const toggleTimer = () => {
     setIsTimerActive((prev) => !prev);
+  };
+
+  const moveUpcomingWorkout = async (upcomingIndex: number, direction: "up" | "down") => {
+    if (!onReorderSessions) return;
+
+    // upcomingIndex is relative to upcoming workouts list
+    // Convert to absolute session index
+    const absoluteIndex = currentSessionIndex + 1 + upcomingIndex;
+    const targetIndex = direction === "up" ? absoluteIndex - 1 : absoluteIndex + 1;
+
+    // Can't move before current workout or beyond end
+    if (targetIndex <= currentSessionIndex || targetIndex >= sessions.length) return;
+
+    const newSessions = [...sessions];
+    [newSessions[absoluteIndex], newSessions[targetIndex]] =
+      [newSessions[targetIndex], newSessions[absoluteIndex]];
+
+    await onReorderSessions(newSessions.map((s) => s.id));
   };
 
   if (!currentSession || !workout) {
@@ -173,6 +238,13 @@ export function WorkoutPlayer({
 
   return (
     <div className="space-y-4">
+      {/* Progress message */}
+      {progressMessage && (
+        <div className="bg-gradient-to-r from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 rounded-xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <p className="text-sm font-medium text-center">{progressMessage}</p>
+        </div>
+      )}
+
       {/* Overall progress */}
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
@@ -315,27 +387,62 @@ export function WorkoutPlayer({
       {(() => {
         const upcomingWorkouts = sessions
           .slice(currentSessionIndex + 1)
-          .filter((s) => !s.completed)
-          .slice(0, 2);
+          .filter((s) => !s.completed);
 
         return upcomingWorkouts.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">
-              Up Next
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-muted-foreground">
+                Up Next
+              </h4>
+              {onReorderSessions && upcomingWorkouts.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReorderMode(!reorderMode)}
+                  className="h-7 text-xs"
+                >
+                  <Settings2 className="h-3 w-3 mr-1" />
+                  {reorderMode ? "Done" : "Reorder"}
+                </Button>
+              )}
+            </div>
             <div className="space-y-2">
-              {upcomingWorkouts.map((session) => (
+              {upcomingWorkouts.map((session, index) => (
                 <div
                   key={session.id}
                   className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
                 >
-                  <span className="font-medium">{session.workout.name}</span>
-                  <span className="text-muted-foreground text-sm">
-                    {session.workout.workoutType === "time"
-                      ? `${session.workout.weight} min`
-                      : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
-                    }
-                  </span>
+                  <span className="font-medium flex-1">{session.workout.name}</span>
+                  {reorderMode ? (
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => moveUpcomingWorkout(index, "up")}
+                        disabled={index === 0}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => moveUpcomingWorkout(index, "down")}
+                        disabled={index === upcomingWorkouts.length - 1}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm shrink-0">
+                      {session.workout.workoutType === "time"
+                        ? `${session.workout.weight} min`
+                        : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
+                      }
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

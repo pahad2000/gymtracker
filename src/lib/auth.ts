@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { sendVerificationEmail, generateVerificationCode } from "./email";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -10,6 +11,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        twoFactorCode: { label: "2FA Code", type: "text", optional: true },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -31,6 +33,52 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!passwordMatch) {
           return null;
+        }
+
+        // Check if 2FA is enabled
+        if (user.twoFactorEnabled) {
+          const twoFactorCode = credentials.twoFactorCode as string | undefined;
+
+          if (!twoFactorCode) {
+            // Generate and send 2FA code
+            const code = generateVerificationCode();
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                twoFactorCode: code,
+                twoFactorExpires: expiresAt,
+              },
+            });
+
+            await sendVerificationEmail(user.email, code);
+
+            // Return a special error to indicate 2FA is needed
+            throw new Error("2FA_REQUIRED");
+          }
+
+          // Verify 2FA code
+          if (!user.twoFactorCode || !user.twoFactorExpires) {
+            throw new Error("No verification code found");
+          }
+
+          if (new Date() > user.twoFactorExpires) {
+            throw new Error("Verification code expired");
+          }
+
+          if (user.twoFactorCode !== twoFactorCode) {
+            throw new Error("Invalid verification code");
+          }
+
+          // Clear 2FA code after successful verification
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              twoFactorCode: null,
+              twoFactorExpires: null,
+            },
+          });
         }
 
         return {

@@ -74,6 +74,22 @@ export function WorkoutForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation: Check interval days is not zero
+    if (scheduleType === "interval") {
+      const intervalValue = parseInt(formData.intervalDays);
+      if (intervalValue <= 0 || isNaN(intervalValue)) {
+        alert("Interval days must be at least 1");
+        return;
+      }
+    }
+
+    // Validation: Check at least one day is selected for specific days schedule
+    if (scheduleType === "days" && formData.scheduleDays.length === 0) {
+      alert("Please select at least one day for the workout schedule");
+      return;
+    }
+
     setLoading(true);
 
     try {

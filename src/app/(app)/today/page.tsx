@@ -190,6 +190,14 @@ export default function TodayPage() {
     fetchData();
   };
 
+  const reorderSessions = async (sessionIds: string[]) => {
+    // Optimistically update local state
+    const reorderedSessions = sessionIds
+      .map((id) => sessions.find((s) => s.id === id))
+      .filter((s): s is WorkoutSession => s !== undefined);
+    setSessions(reorderedSessions);
+  };
+
   const moveWorkout = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= scheduledWorkouts.length) return;
@@ -206,11 +214,27 @@ export default function TodayPage() {
     fetchData();
   };
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    // Create a more visible drag image
+    if (e.currentTarget instanceof HTMLElement) {
+      const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+      dragImage.style.opacity = "0.8";
+      document.body.appendChild(dragImage);
+      dragImage.style.position = "absolute";
+      dragImage.style.top = "-1000px";
+      e.dataTransfer.setDragImage(dragImage, 0, 0);
+      setTimeout(() => document.body.removeChild(dragImage), 0);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
@@ -337,16 +361,17 @@ export default function TodayPage() {
                   <div
                     key={workout.id}
                     draggable
-                    onDragStart={() => handleDragStart(index)}
+                    onDragStart={(e) => handleDragStart(e, index)}
                     onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnter={handleDragEnter}
                     onDrop={(e) => handleDrop(e, index)}
-                    className={`flex items-center gap-3 p-3 rounded-xl cursor-move transition-all ${
+                    className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
                       draggedIndex === index
-                        ? "opacity-50 bg-muted"
-                        : "bg-muted/50 hover:bg-muted"
+                        ? "opacity-50 scale-95 bg-muted shadow-lg"
+                        : "bg-muted/50 hover:bg-muted cursor-grab active:cursor-grabbing hover:shadow-md"
                     }`}
                   >
-                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0 cursor-grab" />
                     <span className="flex-1 font-medium">{workout.name}</span>
                     <div className="flex gap-2 shrink-0">
                       <Button
@@ -401,6 +426,8 @@ export default function TodayPage() {
           sessions={sessions}
           onUpdateSession={updateSession}
           onRegenerateTip={regenerateTip}
+          recentSessions={recentSessions}
+          onReorderSessions={reorderSessions}
         />
       ) : allSessionsComplete ? (
         <div className="text-center py-12">
