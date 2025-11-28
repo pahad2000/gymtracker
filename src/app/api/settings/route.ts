@@ -16,6 +16,8 @@ export async function GET() {
         name: true,
         email: true,
         themeMode: true,
+        twoFactorEnabled: true,
+        weeklyEmailsEnabled: true,
       },
     });
 
@@ -41,19 +43,22 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { name, themeMode } = body;
+    const { name, themeMode, weeklyEmailsEnabled } = body;
 
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         ...(name !== undefined && { name }),
         ...(themeMode !== undefined && { themeMode }),
+        ...(weeklyEmailsEnabled !== undefined && { weeklyEmailsEnabled }),
       },
       select: {
         id: true,
         name: true,
         email: true,
         themeMode: true,
+        twoFactorEnabled: true,
+        weeklyEmailsEnabled: true,
       },
     });
 

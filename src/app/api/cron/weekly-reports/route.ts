@@ -17,8 +17,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get all users
+    // Get all users who have weekly emails enabled
     const users = await prisma.user.findMany({
+      where: {
+        weeklyEmailsEnabled: true,
+      },
       select: {
         id: true,
         email: true,

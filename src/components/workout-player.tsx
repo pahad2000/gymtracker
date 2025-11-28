@@ -45,6 +45,14 @@ export function WorkoutPlayer({
   const currentSession = sessions[currentSessionIndex];
   const workout = currentSession?.workout;
 
+  // Sync currentSet with actual setsCompleted from session data
+  useEffect(() => {
+    if (currentSession && !isResting) {
+      // currentSet should be setsCompleted + 1 (the next set to complete)
+      setCurrentSet(currentSession.setsCompleted + 1);
+    }
+  }, [currentSession, currentSessionIndex, isResting]);
+
   // Skip to next incomplete session if current is completed
   useEffect(() => {
     if (currentSession?.completed) {
