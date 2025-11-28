@@ -85,8 +85,15 @@ export function WorkoutPlayer({
     return () => clearInterval(interval);
   }, [isResting, isTimerActive, restTimeLeft]);
 
-  // Check progress against recent sessions
-  const checkProgress = useCallback((workoutId: string, currentWeight: number) => {
+  // Check progress and provide recommendations
+  const checkProgress = useCallback((
+    workoutId: string,
+    currentWeight: number,
+    workoutType: "weight" | "time",
+    targetSets: number,
+    targetReps: number,
+    actualSetsCompleted: number
+  ) => {
     const previousSessions = recentSessions
       .filter((s) => s.workoutId === workoutId && s.completed)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -99,17 +106,38 @@ export function WorkoutPlayer({
 
     const lastSession = previousSessions[0];
     const lastWeight = lastSession.weightUsed || lastSession.workout.weight;
+    const completedAllSets = actualSetsCompleted >= targetSets;
 
-    if (currentWeight > lastWeight) {
-      const increase = currentWeight - lastWeight;
-      setProgressMessage(`💪 Progress! +${increase.toFixed(1)}kg from last time!`);
-    } else if (currentWeight === lastWeight) {
-      setProgressMessage("✨ Same weight as last time. Consider increasing next session!");
+    if (workoutType === "weight") {
+      // Weight-based workout logic
+      if (currentWeight > lastWeight) {
+        const increase = currentWeight - lastWeight;
+        setProgressMessage(`💪 Great progress! +${increase.toFixed(1)}kg from last time!`);
+      } else if (currentWeight === lastWeight && completedAllSets) {
+        // Same weight, completed all sets - ready to progress
+        const recommendedIncrease = currentWeight * 0.05; // 5% increase
+        const suggestion = Math.max(2.5, Math.round(recommendedIncrease / 2.5) * 2.5); // Round to nearest 2.5kg
+        setProgressMessage(`✨ All sets completed! Try +${suggestion}kg next time to keep progressing.`);
+      } else if (currentWeight === lastWeight && !completedAllSets) {
+        setProgressMessage("📊 Same weight. Focus on completing all sets before increasing.");
+      } else {
+        // Weight decreased
+        setProgressMessage("💪 Good work! Build back up at this weight before progressing.");
+      }
     } else {
-      setProgressMessage("📊 Tracking your progress...");
+      // Time-based workout logic
+      if (currentWeight > lastWeight) {
+        const increase = currentWeight - lastWeight;
+        setProgressMessage(`🏃 Endurance improved! +${increase} min from last time!`);
+      } else if (currentWeight === lastWeight) {
+        const recommendedIncrease = Math.max(5, Math.round(currentWeight * 0.1)); // 10% or 5 min minimum
+        setProgressMessage(`⏱️ Same duration. Try +${recommendedIncrease} min next time to build endurance!`);
+      } else {
+        setProgressMessage("💪 Consistency is key! Maintain this duration and build back up.");
+      }
     }
 
-    setTimeout(() => setProgressMessage(null), 5000);
+    setTimeout(() => setProgressMessage(null), 7000);
   }, [recentSessions]);
 
   const completeSet = useCallback(async () => {
@@ -124,7 +152,14 @@ export function WorkoutPlayer({
     // Check progress when workout is complete
     if (isWorkoutComplete) {
       const currentWeight = currentSession.weightUsed || workout.weight;
-      checkProgress(workout.id, currentWeight);
+      checkProgress(
+        workout.id,
+        currentWeight,
+        workout.workoutType,
+        workout.sets,
+        workout.repsPerSet,
+        newSetsCompleted
+      );
     }
 
     // Immediately update UI before API call for instant feedback
@@ -168,7 +203,14 @@ export function WorkoutPlayer({
 
     // Check progress for time-based workouts
     const currentDuration = currentSession.duration || workout.weight;
-    checkProgress(workout.id, currentDuration);
+    checkProgress(
+      workout.id,
+      currentDuration,
+      workout.workoutType,
+      1, // time-based workouts are 1 "set"
+      1, // not applicable for time-based
+      1  // completed
+    );
 
     // Immediately update UI before API call for instant feedback
     const nextIncompleteIndex = sessions.findIndex(
