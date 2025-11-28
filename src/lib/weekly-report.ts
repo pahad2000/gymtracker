@@ -63,6 +63,7 @@ export async function generateWeeklyReport(userId: string) {
           lt: session.date,
         },
       },
+      include: { workout: true },
       orderBy: { date: "desc" },
       take: 1,
     });
