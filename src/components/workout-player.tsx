@@ -185,16 +185,17 @@ export function WorkoutPlayer({
       }
     }
 
-    // Update API in background
-    try {
-      await onUpdateSession(currentSession.id, {
-        setsCompleted: newSetsCompleted,
-        repsPerSet: newRepsPerSet,
-        completed: isWorkoutComplete,
-      });
-    } finally {
-      setIsCompleting(false);
-    }
+    // Reset completing state immediately for instant button appearance
+    setIsCompleting(false);
+
+    // Update API in background (fire and forget)
+    onUpdateSession(currentSession.id, {
+      setsCompleted: newSetsCompleted,
+      repsPerSet: newRepsPerSet,
+      completed: isWorkoutComplete,
+    }).catch((error) => {
+      console.error("Failed to update session:", error);
+    });
   }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, isCompleting, checkProgress]);
 
   const completeWorkout = useCallback(async () => {
@@ -223,16 +224,17 @@ export function WorkoutPlayer({
       setCurrentSet(1);
     }
 
-    // Update API in background
-    try {
-      await onUpdateSession(currentSession.id, {
-        setsCompleted: 1,
-        repsPerSet: [1],
-        completed: true,
-      });
-    } finally {
-      setIsCompleting(false);
-    }
+    // Reset completing state immediately for instant button appearance
+    setIsCompleting(false);
+
+    // Update API in background (fire and forget)
+    onUpdateSession(currentSession.id, {
+      setsCompleted: 1,
+      repsPerSet: [1],
+      completed: true,
+    }).catch((error) => {
+      console.error("Failed to update session:", error);
+    });
   }, [currentSession, currentSessionIndex, sessions, onUpdateSession, isCompleting, checkProgress]);
 
   const skipRest = () => {
