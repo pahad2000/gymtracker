@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
-import { Loader2, Plus, GripVertical, ChevronUp, ChevronDown, Settings2 } from "lucide-react";
+import { Loader2, Plus, GripVertical, Settings2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { WorkoutPlayer } from "@/components/workout-player";
@@ -19,6 +20,8 @@ export default function TodayPage() {
   const [creatingCustom, setCreatingCustom] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [localWorkoutOrder, setLocalWorkoutOrder] = useState<string[]>([]);
 
   const today = new Date();
 
@@ -73,6 +76,20 @@ export default function TodayPage() {
   };
 
   const scheduledWorkouts = getAvailableWorkouts();
+
+  // Initialize local workout order when scheduled workouts change
+  useEffect(() => {
+    if (scheduledWorkouts.length > 0 && localWorkoutOrder.length === 0) {
+      setLocalWorkoutOrder(scheduledWorkouts.map(w => w.id));
+    }
+  }, [scheduledWorkouts, localWorkoutOrder.length]);
+
+  // Get ordered workouts based on local state or default order
+  const orderedWorkouts = localWorkoutOrder.length > 0
+    ? localWorkoutOrder
+        .map(id => scheduledWorkouts.find(w => w.id === id))
+        .filter((w): w is typeof scheduledWorkouts[0] => w !== undefined)
+    : scheduledWorkouts;
 
   const createSessionsForToday = async () => {
     setCreating(true);
@@ -198,63 +215,62 @@ export default function TodayPage() {
     setSessions(reorderedSessions);
   };
 
-  const moveWorkout = async (index: number, direction: "up" | "down") => {
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= scheduledWorkouts.length) return;
-
-    const newWorkouts = [...scheduledWorkouts];
-    [newWorkouts[index], newWorkouts[newIndex]] = [newWorkouts[newIndex], newWorkouts[index]];
-
-    // Save the new order
-    await fetch("/api/workouts/reorder", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workoutIds: newWorkouts.map((w) => w.id) }),
-    });
-    fetchData();
-  };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = "move";
-    // Create a more visible drag image
     if (e.currentTarget instanceof HTMLElement) {
-      const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
-      dragImage.style.opacity = "0.8";
-      document.body.appendChild(dragImage);
-      dragImage.style.position = "absolute";
-      dragImage.style.top = "-1000px";
-      e.dataTransfer.setDragImage(dragImage, 0, 0);
-      setTimeout(() => document.body.removeChild(dragImage), 0);
+      e.currentTarget.style.opacity = "0.5";
     }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
   };
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
   };
 
   const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) return;
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
 
-    const newWorkouts = [...scheduledWorkouts];
-    const [draggedWorkout] = newWorkouts.splice(draggedIndex, 1);
-    newWorkouts.splice(dropIndex, 0, draggedWorkout);
+    // Optimistic update - reorder immediately
+    const newOrder = [...localWorkoutOrder];
+    const [draggedId] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(dropIndex, 0, draggedId);
+    setLocalWorkoutOrder(newOrder);
 
     setDraggedIndex(null);
+    setDragOverIndex(null);
 
-    // Save the new order
-    await fetch("/api/workouts/reorder", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workoutIds: newWorkouts.map((w) => w.id) }),
-    });
-    fetchData();
+    // Save to server in background
+    try {
+      await fetch("/api/workouts/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workoutIds: newOrder }),
+      });
+    } catch (error) {
+      console.error("Failed to save workout order:", error);
+      // Revert on error
+      fetchData();
+    }
   };
 
   if (loading) {
@@ -357,47 +373,34 @@ export default function TodayPage() {
           {reorderMode ? (
             <Card>
               <CardContent className="p-4 space-y-2">
-                {scheduledWorkouts.map((workout, index) => (
+                <p className="text-xs text-muted-foreground text-center mb-3">
+                  Drag and drop to reorder workouts
+                </p>
+                {orderedWorkouts.map((workout, index) => (
                   <div
                     key={workout.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, index)}
+                    onDragEnd={handleDragEnd}
                     onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
-                    className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                      draggedIndex === index
-                        ? "opacity-50 scale-95 bg-muted shadow-lg"
-                        : "bg-muted/50 hover:bg-muted cursor-grab active:cursor-grabbing hover:shadow-md"
-                    }`}
+                    className={cn(
+                      "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
+                      draggedIndex === index && "opacity-40",
+                      dragOverIndex === index && draggedIndex !== index && "border-2 border-primary border-dashed",
+                      draggedIndex !== index && "bg-muted/50 hover:bg-muted cursor-grab active:cursor-grabbing hover:shadow-sm"
+                    )}
                   >
-                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0 cursor-grab" />
-                    <span className="flex-1 font-medium">{workout.name}</span>
-                    <div className="flex gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 touch-manipulation"
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          moveWorkout(index, "up");
-                        }}
-                        disabled={index === 0}
-                      >
-                        <ChevronUp className="h-5 w-5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 touch-manipulation"
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          moveWorkout(index, "down");
-                        }}
-                        disabled={index === scheduledWorkouts.length - 1}
-                      >
-                        <ChevronDown className="h-5 w-5" />
-                      </Button>
+                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <div className="flex-1">
+                      <span className="font-medium">{workout.name}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {workout.workoutType === "time"
+                          ? `${workout.weight} min`
+                          : `${workout.sets} x ${workout.repsPerSet} @ ${workout.weight}kg`
+                        }
+                      </p>
                     </div>
                   </div>
                 ))}

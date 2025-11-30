@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, ChevronUp, ChevronDown, Settings2 } from "lucide-react";
+import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDuration } from "@/lib/utils";
@@ -33,6 +33,8 @@ export function WorkoutPlayer({
   const [isCompleting, setIsCompleting] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [reorderMode, setReorderMode] = useState(false);
+  const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
+  const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
 
   // Find first incomplete session on mount
   useEffect(() => {
@@ -243,21 +245,53 @@ export function WorkoutPlayer({
     setIsTimerActive((prev) => !prev);
   };
 
-  const moveUpcomingWorkout = async (upcomingIndex: number, direction: "up" | "down") => {
-    if (!onReorderSessions) return;
+  const handleUpcomingDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedUpcomingIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
+    }
+  };
 
-    // upcomingIndex is relative to upcoming workouts list
-    // Convert to absolute session index
-    const absoluteIndex = currentSessionIndex + 1 + upcomingIndex;
-    const targetIndex = direction === "up" ? absoluteIndex - 1 : absoluteIndex + 1;
+  const handleUpcomingDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+    setDraggedUpcomingIndex(null);
+    setDragOverUpcomingIndex(null);
+  };
 
-    // Can't move before current workout or beyond end
-    if (targetIndex <= currentSessionIndex || targetIndex >= sessions.length) return;
+  const handleUpcomingDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverUpcomingIndex(index);
+  };
 
+  const handleUpcomingDragLeave = () => {
+    setDragOverUpcomingIndex(null);
+  };
+
+  const handleUpcomingDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (!onReorderSessions || draggedUpcomingIndex === null || draggedUpcomingIndex === dropIndex) {
+      setDraggedUpcomingIndex(null);
+      setDragOverUpcomingIndex(null);
+      return;
+    }
+
+    // Convert upcoming indices to absolute session indices
+    const dragAbsoluteIndex = currentSessionIndex + 1 + draggedUpcomingIndex;
+    const dropAbsoluteIndex = currentSessionIndex + 1 + dropIndex;
+
+    // Create new sessions array with reordered items
     const newSessions = [...sessions];
-    [newSessions[absoluteIndex], newSessions[targetIndex]] =
-      [newSessions[targetIndex], newSessions[absoluteIndex]];
+    const [draggedSession] = newSessions.splice(dragAbsoluteIndex, 1);
+    newSessions.splice(dropAbsoluteIndex, 0, draggedSession);
 
+    setDraggedUpcomingIndex(null);
+    setDragOverUpcomingIndex(null);
+
+    // Update immediately (optimistic)
     await onReorderSessions(newSessions.map((s) => s.id));
   };
 
@@ -457,42 +491,40 @@ export function WorkoutPlayer({
                 </Button>
               )}
             </div>
+            {reorderMode && upcomingWorkouts.length > 1 && (
+              <p className="text-xs text-muted-foreground text-center">
+                Drag and drop to reorder workouts
+              </p>
+            )}
             <div className="space-y-2">
               {upcomingWorkouts.map((session, index) => (
                 <div
                   key={session.id}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
-                >
-                  <span className="font-medium flex-1">{session.workout.name}</span>
-                  {reorderMode ? (
-                    <div className="flex gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => moveUpcomingWorkout(index, "up")}
-                        disabled={index === 0}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => moveUpcomingWorkout(index, "down")}
-                        disabled={index === upcomingWorkouts.length - 1}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-sm shrink-0">
-                      {session.workout.workoutType === "time"
-                        ? `${session.workout.weight} min`
-                        : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
-                      }
-                    </span>
+                  draggable={reorderMode}
+                  onDragStart={(e) => reorderMode && handleUpcomingDragStart(e, index)}
+                  onDragEnd={handleUpcomingDragEnd}
+                  onDragOver={(e) => reorderMode && handleUpcomingDragOver(e, index)}
+                  onDragLeave={handleUpcomingDragLeave}
+                  onDrop={(e) => reorderMode && handleUpcomingDrop(e, index)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-xl transition-all duration-200",
+                    reorderMode ? [
+                      draggedUpcomingIndex === index && "opacity-40",
+                      dragOverUpcomingIndex === index && draggedUpcomingIndex !== index && "border-2 border-primary border-dashed",
+                      draggedUpcomingIndex !== index && "bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted hover:shadow-sm"
+                    ] : "bg-muted/50"
                   )}
+                >
+                  {reorderMode && (
+                    <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="font-medium flex-1">{session.workout.name}</span>
+                  <span className="text-muted-foreground text-sm shrink-0">
+                    {session.workout.workoutType === "time"
+                      ? `${session.workout.weight} min`
+                      : `${session.workout.sets} x ${session.workout.repsPerSet} @ ${session.workout.weight}kg`
+                    }
+                  </span>
                 </div>
               ))}
             </div>
