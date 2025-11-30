@@ -213,6 +213,20 @@ export default function TodayPage() {
       .map((id) => sessions.find((s) => s.id === id))
       .filter((s): s is WorkoutSession => s !== undefined);
     setSessions(reorderedSessions);
+
+    // Persist order to database by updating workout displayOrder
+    const workoutIds = reorderedSessions.map((s) => s.workoutId);
+    try {
+      await fetch("/api/workouts/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workoutIds }),
+      });
+    } catch (error) {
+      console.error("Failed to save session order:", error);
+      // Revert on error
+      fetchData();
+    }
   };
 
 
@@ -287,6 +301,11 @@ export default function TodayPage() {
 
   const hasIncompleteSession = sessions.some((s) => !s.completed);
   const allSessionsComplete = sessions.length > 0 && sessions.every((s) => s.completed);
+
+  // Sort sessions by workout displayOrder to maintain reordering in WorkoutPlayer
+  const orderedSessions = [...sessions].sort((a, b) =>
+    (a.workout.displayOrder || 0) - (b.workout.displayOrder || 0)
+  );
 
   return (
     <div className="space-y-6">
@@ -426,7 +445,7 @@ export default function TodayPage() {
         </div>
       ) : hasIncompleteSession ? (
         <WorkoutPlayer
-          sessions={sessions}
+          sessions={orderedSessions}
           onUpdateSession={updateSession}
           onRegenerateTip={regenerateTip}
           recentSessions={recentSessions}
