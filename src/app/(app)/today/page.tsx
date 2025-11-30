@@ -208,10 +208,17 @@ export default function TodayPage() {
   };
 
   const reorderSessions = async (sessionIds: string[]) => {
-    // Optimistically update local state
+    // Optimistically update local state with new order AND displayOrder values
     const reorderedSessions = sessionIds
       .map((id) => sessions.find((s) => s.id === id))
-      .filter((s): s is WorkoutSession => s !== undefined);
+      .filter((s): s is WorkoutSession => s !== undefined)
+      .map((session, index) => ({
+        ...session,
+        workout: {
+          ...session.workout,
+          displayOrder: index,
+        },
+      }));
     setSessions(reorderedSessions);
 
     // Persist order to database by updating workout displayOrder
