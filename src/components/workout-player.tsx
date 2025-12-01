@@ -36,6 +36,9 @@ export function WorkoutPlayer({
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
 
+  // Track expected sets completed locally to prevent stale data issues
+  const [expectedSetsCompleted, setExpectedSetsCompleted] = useState(0);
+
   // Find first incomplete session on mount
   useEffect(() => {
     const firstIncompleteIndex = sessions.findIndex((s) => !s.completed);
@@ -47,13 +50,20 @@ export function WorkoutPlayer({
   const currentSession = sessions[currentSessionIndex];
   const workout = currentSession?.workout;
 
-  // Sync currentSet with actual setsCompleted from session data
+  // Sync expectedSetsCompleted when session changes (new workout)
   useEffect(() => {
-    if (currentSession && !isResting) {
-      // currentSet should be setsCompleted + 1 (the next set to complete)
-      setCurrentSet(currentSession.setsCompleted + 1);
+    if (currentSession) {
+      setExpectedSetsCompleted(currentSession.setsCompleted);
     }
-  }, [currentSession, currentSessionIndex, isResting]);
+  }, [currentSession?.id]);
+
+  // Sync currentSet with expected sets completed (not actual session data)
+  // This prevents using stale data when completing sets rapidly
+  useEffect(() => {
+    if (!isResting) {
+      setCurrentSet(expectedSetsCompleted + 1);
+    }
+  }, [expectedSetsCompleted, isResting]);
 
   // Skip to next incomplete session if current is completed
   // This handles cases where data is refetched and current session is now complete
@@ -155,9 +165,13 @@ export function WorkoutPlayer({
 
     setIsCompleting(true);
 
-    const newSetsCompleted = currentSession.setsCompleted + 1;
+    // Use local expected value instead of potentially stale session data
+    const newSetsCompleted = expectedSetsCompleted + 1;
     const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
     const isWorkoutComplete = newSetsCompleted >= workout.sets;
+
+    // Update local expectation immediately (prevents stale data on rapid clicks)
+    setExpectedSetsCompleted(newSetsCompleted);
 
     // Check progress when workout is complete
     if (isWorkoutComplete) {
@@ -197,6 +211,8 @@ export function WorkoutPlayer({
         setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
         setIsResting(false);
+        // Reset expected sets for new workout (will sync from session data via useEffect)
+        setExpectedSetsCompleted(0);
       }
       // If no next workout, stay on current (will show completion message)
     } else {
@@ -214,7 +230,7 @@ export function WorkoutPlayer({
     setTimeout(() => {
       setIsCompleting(false);
     }, 200);
-  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
+  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting, expectedSetsCompleted]);
 
   const completeWorkout = useCallback(async () => {
     if (!currentSession || isCompleting) return;
@@ -255,6 +271,8 @@ export function WorkoutPlayer({
     if (nextIncompleteIndex !== -1) {
       setCurrentSessionIndex(nextIncompleteIndex);
       setCurrentSet(1);
+      // Reset expected sets for new workout (will sync from session data via useEffect)
+      setExpectedSetsCompleted(0);
     }
     // If no next workout, stay on current (will show completion message)
 
