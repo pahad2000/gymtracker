@@ -73,15 +73,24 @@ export function WorkoutPlayer({
   // This handles cases where data is refetched and current session is now complete
   useEffect(() => {
     if (currentSession?.completed && !isResting) {
-      // Find next incomplete using session IDs
-      let foundCurrent = false;
-      const nextIncomplete = sessions.find((s) => {
-        if (s.id === currentSession.id) {
-          foundCurrent = true;
-          return false;
+      // Find current session's position in array
+      const currentIndex = sessions.findIndex((s) => s.id === currentSession.id);
+
+      if (currentIndex === -1) {
+        // Current session not in array - find first incomplete
+        const firstIncomplete = sessions.find((s) => !s.completed);
+        setCurrentSessionId(firstIncomplete?.id || null);
+        if (firstIncomplete) {
+          setCurrentSet(1);
+          setIsResting(false);
         }
-        return foundCurrent && !s.completed;
-      });
+        return;
+      }
+
+      // Find first incomplete session AFTER current position
+      const nextIncomplete = sessions
+        .slice(currentIndex + 1)
+        .find((s) => !s.completed);
 
       if (nextIncomplete) {
         setCurrentSessionId(nextIncomplete.id);
