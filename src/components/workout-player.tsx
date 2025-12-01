@@ -56,18 +56,26 @@ export function WorkoutPlayer({
   }, [currentSession, currentSessionIndex, isResting]);
 
   // Skip to next incomplete session if current is completed
+  // This handles cases where data is refetched and current session is now complete
   useEffect(() => {
-    if (currentSession?.completed) {
-      const nextIncompleteIndex = sessions.findIndex(
-        (s, idx) => idx > currentSessionIndex && !s.completed
-      );
+    if (currentSession?.completed && !isResting) {
+      // Find next incomplete using session IDs instead of indices
+      let foundCurrent = false;
+      const nextIncompleteIndex = sessions.findIndex((s) => {
+        if (s.id === currentSession.id) {
+          foundCurrent = true;
+          return false;
+        }
+        return foundCurrent && !s.completed;
+      });
+
       if (nextIncompleteIndex !== -1) {
         setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
         setIsResting(false);
       }
     }
-  }, [currentSession?.completed, currentSessionIndex, sessions]);
+  }, [currentSession?.completed, currentSession?.id, sessions, isResting]);
 
   // Rest timer
   useEffect(() => {
@@ -175,15 +183,22 @@ export function WorkoutPlayer({
 
     // Update local UI state immediately after
     if (isWorkoutComplete) {
-      // Move to next incomplete workout (exclude current session from search)
-      const nextIncompleteIndex = sessions.findIndex(
-        (s, idx) => idx > currentSessionIndex && !s.completed
-      );
+      // Move to next incomplete workout using session IDs (not indices)
+      let foundCurrent = false;
+      const nextIncompleteIndex = sessions.findIndex((s) => {
+        if (s.id === currentSession.id) {
+          foundCurrent = true;
+          return false; // Skip current session
+        }
+        return foundCurrent && !s.completed; // Find first incomplete after current
+      });
+
       if (nextIncompleteIndex !== -1) {
         setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
         setIsResting(false);
       }
+      // If no next workout, stay on current (will show completion message)
     } else {
       // Start rest timer immediately (only for weight-based workouts)
       if (workout.workoutType !== "time") {
@@ -227,14 +242,21 @@ export function WorkoutPlayer({
       console.error("Failed to update session:", error);
     });
 
-    // Update local UI state immediately after
-    const nextIncompleteIndex = sessions.findIndex(
-      (s, idx) => idx > currentSessionIndex && !s.completed
-    );
+    // Move to next incomplete workout using session IDs (not indices)
+    let foundCurrent = false;
+    const nextIncompleteIndex = sessions.findIndex((s) => {
+      if (s.id === currentSession.id) {
+        foundCurrent = true;
+        return false; // Skip current session
+      }
+      return foundCurrent && !s.completed; // Find first incomplete after current
+    });
+
     if (nextIncompleteIndex !== -1) {
       setCurrentSessionIndex(nextIncompleteIndex);
       setCurrentSet(1);
     }
+    // If no next workout, stay on current (will show completion message)
 
     // Delay resetting isCompleting to prevent rapid duplicate clicks
     setTimeout(() => {
