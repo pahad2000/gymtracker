@@ -164,16 +164,8 @@ export function WorkoutPlayer({
       );
     }
 
-    // Call parent's optimistic update first (synchronous state update)
-    onUpdateSession(currentSession.id, {
-      setsCompleted: newSetsCompleted,
-      repsPerSet: newRepsPerSet,
-      completed: isWorkoutComplete,
-    }).catch((error) => {
-      console.error("Failed to update session:", error);
-    });
-
-    // Then immediately update local UI state
+    // Update local UI state FIRST before calling parent update
+    // This ensures local state takes precedence during re-render
     if (isWorkoutComplete) {
       // Move to next incomplete workout
       const nextIncompleteIndex = sessions.findIndex(
@@ -183,6 +175,7 @@ export function WorkoutPlayer({
         setCurrentSessionIndex(nextIncompleteIndex);
         setCurrentSet(1);
         setIsResting(false);
+        setIsCompleting(false);
       }
     } else {
       // Start rest timer immediately (only for weight-based workouts)
@@ -191,11 +184,18 @@ export function WorkoutPlayer({
         setRestTimeLeft(workout.restTime);
         setIsResting(true);
         setIsTimerActive(true);
+        setIsCompleting(false);
       }
     }
 
-    // Reset completing state for instant next button
-    setIsCompleting(false);
+    // Then call parent's optimistic update (triggers re-render with new props)
+    onUpdateSession(currentSession.id, {
+      setsCompleted: newSetsCompleted,
+      repsPerSet: newRepsPerSet,
+      completed: isWorkoutComplete,
+    }).catch((error) => {
+      console.error("Failed to update session:", error);
+    });
   }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const completeWorkout = useCallback(async () => {
@@ -215,7 +215,17 @@ export function WorkoutPlayer({
       1  // completed
     );
 
-    // Call parent's optimistic update first (synchronous state update)
+    // Update local UI state FIRST before calling parent update
+    const nextIncompleteIndex = sessions.findIndex(
+      (s, idx) => idx > currentSessionIndex && !s.completed
+    );
+    if (nextIncompleteIndex !== -1) {
+      setCurrentSessionIndex(nextIncompleteIndex);
+      setCurrentSet(1);
+      setIsCompleting(false);
+    }
+
+    // Then call parent's optimistic update (triggers re-render with new props)
     onUpdateSession(currentSession.id, {
       setsCompleted: 1,
       repsPerSet: [1],
@@ -223,18 +233,6 @@ export function WorkoutPlayer({
     }).catch((error) => {
       console.error("Failed to update session:", error);
     });
-
-    // Then immediately update local UI state
-    const nextIncompleteIndex = sessions.findIndex(
-      (s, idx) => idx > currentSessionIndex && !s.completed
-    );
-    if (nextIncompleteIndex !== -1) {
-      setCurrentSessionIndex(nextIncompleteIndex);
-      setCurrentSet(1);
-    }
-
-    // Reset completing state for instant next button
-    setIsCompleting(false);
   }, [currentSession, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const skipRest = () => {
