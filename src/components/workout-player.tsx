@@ -180,7 +180,7 @@ export function WorkoutPlayer({
     } else {
       // Start rest timer immediately (only for weight-based workouts)
       if (workout.workoutType !== "time") {
-        setCurrentSet((prev) => prev + 1);
+        // Don't manually set currentSet - let useEffect sync it from session data
         setRestTimeLeft(workout.restTime);
         setIsResting(true);
         setIsTimerActive(true);
