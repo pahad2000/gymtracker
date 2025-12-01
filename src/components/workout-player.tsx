@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,12 @@ interface WorkoutPlayerProps {
   onReorderSessions?: (sessionIds: string[]) => Promise<void>;
 }
 
+// Action queue item for sequential processing
+interface QueuedAction {
+  type: 'complete-set' | 'complete-workout';
+  sessionId: string;
+}
+
 export function WorkoutPlayer({
   sessions,
   onUpdateSession,
@@ -30,78 +36,58 @@ export function WorkoutPlayer({
   const [isResting, setIsResting] = useState(false);
   const [restTimeLeft, setRestTimeLeft] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
 
-  // Track expected sets completed locally to prevent stale data issues
-  const [expectedSetsCompleted, setExpectedSetsCompleted] = useState(0);
+  // Queue-based processing to prevent race conditions
+  const actionQueueRef = useRef<QueuedAction[]>([]);
+  const isProcessingRef = useRef(false);
 
-  // Find first incomplete session on mount
+  // Local optimistic state - single source of truth for current progress
+  const localStateRef = useRef<Map<string, { setsCompleted: number; completed: boolean }>>(new Map());
+
+  // Helper to get local or actual state
+  const getSessionState = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return null;
+
+    const localState = localStateRef.current.get(sessionId);
+    if (localState) {
+      return {
+        ...session,
+        setsCompleted: localState.setsCompleted,
+        completed: localState.completed,
+      };
+    }
+    return session;
+  }, [sessions]);
+
+  // Find first incomplete session on mount and when sessions change
   useEffect(() => {
-    if (!currentSessionId) {
-      const firstIncomplete = sessions.find((s) => !s.completed);
+    if (!currentSessionId || !sessions.find((s) => s.id === currentSessionId)) {
+      // Find first incomplete using local state if available
+      const firstIncomplete = sessions.find((s) => {
+        const state = getSessionState(s.id);
+        return state && !state.completed;
+      });
+
       if (firstIncomplete) {
         setCurrentSessionId(firstIncomplete.id);
-      }
-    }
-  }, [sessions, currentSessionId]);
-
-  // Find current session by ID (not index - prevents wrong workout when array changes)
-  const currentSession = sessions.find((s) => s.id === currentSessionId);
-  const currentSessionIndex = sessions.findIndex((s) => s.id === currentSessionId);
-  const workout = currentSession?.workout;
-
-  // Sync expectedSetsCompleted when session changes (new workout)
-  useEffect(() => {
-    if (currentSession) {
-      setExpectedSetsCompleted(currentSession.setsCompleted);
-    }
-  }, [currentSession?.id]);
-
-  // Sync currentSet with expected sets completed (not actual session data)
-  // This prevents using stale data when completing sets rapidly
-  useEffect(() => {
-    if (!isResting) {
-      setCurrentSet(expectedSetsCompleted + 1);
-    }
-  }, [expectedSetsCompleted, isResting]);
-
-  // Skip to next incomplete session if current is completed
-  // This handles cases where data is refetched and current session is now complete
-  useEffect(() => {
-    if (currentSession?.completed && !isResting) {
-      // Find current session's position in array
-      const currentIndex = sessions.findIndex((s) => s.id === currentSession.id);
-
-      if (currentIndex === -1) {
-        // Current session not in array - find first incomplete
-        const firstIncomplete = sessions.find((s) => !s.completed);
-        setCurrentSessionId(firstIncomplete?.id || null);
-        if (firstIncomplete) {
-          setCurrentSet(1);
-          setIsResting(false);
-        }
-        return;
-      }
-
-      // Find first incomplete session AFTER current position
-      const nextIncomplete = sessions
-        .slice(currentIndex + 1)
-        .find((s) => !s.completed);
-
-      if (nextIncomplete) {
-        setCurrentSessionId(nextIncomplete.id);
-        setCurrentSet(1);
+        const state = getSessionState(firstIncomplete.id);
+        setCurrentSet((state?.setsCompleted || 0) + 1);
         setIsResting(false);
       } else {
-        // No more incomplete workouts - clear current to show completion
         setCurrentSessionId(null);
       }
     }
-  }, [currentSession?.completed, currentSession?.id, sessions, isResting]);
+  }, [sessions, currentSessionId, getSessionState]);
+
+  // Get current session using local optimistic state
+  const currentSession = getSessionState(currentSessionId || '');
+  const currentSessionIndex = sessions.findIndex((s) => s.id === currentSessionId);
+  const workout = currentSession?.workout;
 
   // Rest timer
   useEffect(() => {
@@ -176,93 +162,166 @@ export function WorkoutPlayer({
     setTimeout(() => setProgressMessage(null), 7000);
   }, [recentSessions]);
 
-  const completeSet = useCallback(async () => {
-    if (!currentSession || !workout || isCompleting) return;
-
-    setIsCompleting(true);
-
-    // Use local expected value instead of potentially stale session data
-    const newSetsCompleted = expectedSetsCompleted + 1;
-    const newRepsPerSet = [...currentSession.repsPerSet, workout.repsPerSet];
-    const isWorkoutComplete = newSetsCompleted >= workout.sets;
-
-    // Update local expectation immediately (prevents stale data on rapid clicks)
-    setExpectedSetsCompleted(newSetsCompleted);
-
-    // Check progress when workout is complete
-    if (isWorkoutComplete) {
-      const currentWeight = currentSession.weightUsed || workout.weight;
-      checkProgress(
-        workout.id,
-        currentWeight,
-        workout.workoutType,
-        workout.sets,
-        workout.repsPerSet,
-        newSetsCompleted
-      );
+  // Process the action queue sequentially
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current || actionQueueRef.current.length === 0) {
+      return;
     }
 
-    // Call parent's optimistic update first
-    onUpdateSession(currentSession.id, {
-      setsCompleted: newSetsCompleted,
-      repsPerSet: newRepsPerSet,
-      completed: isWorkoutComplete,
-    }).catch((error) => {
-      console.error("Failed to update session:", error);
-    });
+    isProcessingRef.current = true;
+    const action = actionQueueRef.current.shift()!;
 
-    // Update local UI state immediately after
-    if (!isWorkoutComplete) {
-      // Start rest timer immediately (only for weight-based workouts)
-      if (workout.workoutType !== "time") {
-        setRestTimeLeft(workout.restTime);
-        setIsResting(true);
-        setIsTimerActive(true);
+    try {
+      const session = getSessionState(action.sessionId);
+      if (!session || session.completed) {
+        isProcessingRef.current = false;
+        processQueue(); // Process next item
+        return;
+      }
+
+      const workout = session.workout;
+
+      if (action.type === 'complete-set') {
+        const newSetsCompleted = session.setsCompleted + 1;
+        const newRepsPerSet = [...session.repsPerSet, workout.repsPerSet];
+        const isWorkoutComplete = newSetsCompleted >= workout.sets;
+
+        // Update local state immediately - this is our source of truth
+        localStateRef.current.set(session.id, {
+          setsCompleted: newSetsCompleted,
+          completed: isWorkoutComplete,
+        });
+
+        // Update UI state
+        setCurrentSet(newSetsCompleted + 1);
+
+        // Check progress when workout is complete
+        if (isWorkoutComplete) {
+          const currentWeight = session.weightUsed || workout.weight;
+          checkProgress(
+            workout.id,
+            currentWeight,
+            workout.workoutType,
+            workout.sets,
+            workout.repsPerSet,
+            newSetsCompleted
+          );
+
+          // Move to next workout immediately
+          const currentIndex = sessions.findIndex((s) => s.id === session.id);
+          const nextIncomplete = sessions
+            .slice(currentIndex + 1)
+            .find((s) => {
+              const state = getSessionState(s.id);
+              return state && !state.completed;
+            });
+
+          if (nextIncomplete) {
+            setCurrentSessionId(nextIncomplete.id);
+            const nextState = getSessionState(nextIncomplete.id);
+            setCurrentSet((nextState?.setsCompleted || 0) + 1);
+            setIsResting(false);
+          } else {
+            setCurrentSessionId(null);
+          }
+        } else {
+          // Start rest timer for weight-based workouts
+          if (workout.workoutType !== "time") {
+            setRestTimeLeft(workout.restTime);
+            setIsResting(true);
+            setIsTimerActive(true);
+          }
+        }
+
+        // Persist to backend (fire and forget - local state is source of truth)
+        onUpdateSession(session.id, {
+          setsCompleted: newSetsCompleted,
+          repsPerSet: newRepsPerSet,
+          completed: isWorkoutComplete,
+        }).catch((error) => {
+          console.error("Failed to update session:", error);
+          // On error, could revert local state here
+        });
+
+      } else if (action.type === 'complete-workout') {
+        // Update local state
+        localStateRef.current.set(session.id, {
+          setsCompleted: 1,
+          completed: true,
+        });
+
+        // Check progress
+        const currentDuration = session.duration || workout.weight;
+        checkProgress(
+          workout.id,
+          currentDuration,
+          workout.workoutType,
+          1,
+          1,
+          1
+        );
+
+        // Move to next workout
+        const currentIndex = sessions.findIndex((s) => s.id === session.id);
+        const nextIncomplete = sessions
+          .slice(currentIndex + 1)
+          .find((s) => {
+            const state = getSessionState(s.id);
+            return state && !state.completed;
+          });
+
+        if (nextIncomplete) {
+          setCurrentSessionId(nextIncomplete.id);
+          const nextState = getSessionState(nextIncomplete.id);
+          setCurrentSet((nextState?.setsCompleted || 0) + 1);
+          setIsResting(false);
+        } else {
+          setCurrentSessionId(null);
+        }
+
+        // Persist to backend
+        onUpdateSession(session.id, {
+          setsCompleted: 1,
+          repsPerSet: [1],
+          completed: true,
+        }).catch((error) => {
+          console.error("Failed to update session:", error);
+        });
+      }
+    } finally {
+      isProcessingRef.current = false;
+      // Process next item in queue
+      if (actionQueueRef.current.length > 0) {
+        processQueue();
       }
     }
-    // If workout complete, useEffect will handle moving to next workout after parent updates
+  }, [sessions, onUpdateSession, checkProgress, getSessionState]);
 
-    // Delay resetting isCompleting to prevent rapid duplicate clicks
-    // Increased to 300ms to ensure parent state propagates
-    setTimeout(() => {
-      setIsCompleting(false);
-    }, 300);
-  }, [currentSession, workout, sessions, onUpdateSession, checkProgress, isCompleting, expectedSetsCompleted]);
+  const completeSet = useCallback(() => {
+    if (!currentSession || !workout) return;
 
-  const completeWorkout = useCallback(async () => {
-    if (!currentSession || isCompleting) return;
-
-    const workout = currentSession.workout;
-    setIsCompleting(true);
-
-    // Check progress for time-based workouts
-    const currentDuration = currentSession.duration || workout.weight;
-    checkProgress(
-      workout.id,
-      currentDuration,
-      workout.workoutType,
-      1, // time-based workouts are 1 "set"
-      1, // not applicable for time-based
-      1  // completed
-    );
-
-    // Call parent's optimistic update first
-    onUpdateSession(currentSession.id, {
-      setsCompleted: 1,
-      repsPerSet: [1],
-      completed: true,
-    }).catch((error) => {
-      console.error("Failed to update session:", error);
+    // Queue the action
+    actionQueueRef.current.push({
+      type: 'complete-set',
+      sessionId: currentSession.id,
     });
 
-    // useEffect will handle moving to next workout after parent updates
+    // Start processing
+    processQueue();
+  }, [currentSession, workout, processQueue]);
 
-    // Delay resetting isCompleting to prevent rapid duplicate clicks
-    // Increased to 300ms to ensure parent state propagates
-    setTimeout(() => {
-      setIsCompleting(false);
-    }, 300);
-  }, [currentSession, sessions, onUpdateSession, checkProgress, isCompleting]);
+  const completeWorkout = useCallback(() => {
+    if (!currentSession) return;
+
+    // Queue the action
+    actionQueueRef.current.push({
+      type: 'complete-workout',
+      sessionId: currentSession.id,
+    });
+
+    // Start processing
+    processQueue();
+  }, [currentSession, processQueue]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -343,8 +402,14 @@ export function WorkoutPlayer({
   }
 
   // Calculate overall progress based on completed sessions + current progress
-  const completedCount = sessions.filter((s) => s.completed).length;
-  const currentProgress = currentSession ? (currentSession.setsCompleted / workout.sets) : 0;
+  // Use local state for accurate counts
+  const completedCount = sessions.filter((s) => {
+    const state = getSessionState(s.id);
+    return state?.completed;
+  }).length;
+  const currentProgress = currentSession && workout
+    ? (currentSession.setsCompleted / workout.sets)
+    : 0;
   const overallProgress = sessions.length > 0
     ? ((completedCount + currentProgress) / sessions.length) * 100
     : 0;
@@ -449,7 +514,7 @@ export function WorkoutPlayer({
                 </Button>
               </div>
             </div>
-          ) : !isCompleting ? (
+          ) : (
             workout.workoutType === "time" ? (
               <Button
                 onClick={completeWorkout}
@@ -471,7 +536,7 @@ export function WorkoutPlayer({
                 Complete Set {currentSet}
               </Button>
             )
-          ) : null}
+          )}
 
           {/* AI Tip */}
           {workout.aiTip && (
@@ -500,7 +565,10 @@ export function WorkoutPlayer({
       {(() => {
         const upcomingWorkouts = sessions
           .slice(currentSessionIndex + 1)
-          .filter((s) => !s.completed);
+          .filter((s) => {
+            const state = getSessionState(s.id);
+            return state && !state.completed;
+          });
 
         return upcomingWorkouts.length > 0 && (
           <div className="space-y-2">
