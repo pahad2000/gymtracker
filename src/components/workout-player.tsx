@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,9 +35,6 @@ export function WorkoutPlayer({
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
-
-  // Ref to prevent duplicate clicks while API calls are in flight
-  const isProcessingRef = useRef(false);
 
   // Find first incomplete session on mount
   useEffect(() => {
@@ -146,9 +143,8 @@ export function WorkoutPlayer({
   }, [recentSessions]);
 
   const completeSet = useCallback(async () => {
-    if (!currentSession || !workout || isProcessingRef.current) return;
+    if (!currentSession || !workout || isCompleting) return;
 
-    isProcessingRef.current = true;
     setIsCompleting(true);
 
     const newSetsCompleted = currentSession.setsCompleted + 1;
@@ -168,7 +164,16 @@ export function WorkoutPlayer({
       );
     }
 
-    // Immediately update UI before API call for instant feedback
+    // Call parent's optimistic update first (synchronous state update)
+    onUpdateSession(currentSession.id, {
+      setsCompleted: newSetsCompleted,
+      repsPerSet: newRepsPerSet,
+      completed: isWorkoutComplete,
+    }).catch((error) => {
+      console.error("Failed to update session:", error);
+    });
+
+    // Then immediately update local UI state
     if (isWorkoutComplete) {
       // Move to next incomplete workout
       const nextIncompleteIndex = sessions.findIndex(
@@ -189,28 +194,13 @@ export function WorkoutPlayer({
       }
     }
 
-    // Reset completing state immediately for instant button appearance
+    // Reset completing state for instant next button
     setIsCompleting(false);
-
-    // Update API in background, reset processing ref when done
-    onUpdateSession(currentSession.id, {
-      setsCompleted: newSetsCompleted,
-      repsPerSet: newRepsPerSet,
-      completed: isWorkoutComplete,
-    })
-      .then(() => {
-        isProcessingRef.current = false;
-      })
-      .catch((error) => {
-        console.error("Failed to update session:", error);
-        isProcessingRef.current = false;
-      });
-  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress]);
+  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const completeWorkout = useCallback(async () => {
-    if (!currentSession || isProcessingRef.current) return;
+    if (!currentSession || isCompleting) return;
 
-    isProcessingRef.current = true;
     const workout = currentSession.workout;
     setIsCompleting(true);
 
@@ -225,7 +215,16 @@ export function WorkoutPlayer({
       1  // completed
     );
 
-    // Immediately update UI before API call for instant feedback
+    // Call parent's optimistic update first (synchronous state update)
+    onUpdateSession(currentSession.id, {
+      setsCompleted: 1,
+      repsPerSet: [1],
+      completed: true,
+    }).catch((error) => {
+      console.error("Failed to update session:", error);
+    });
+
+    // Then immediately update local UI state
     const nextIncompleteIndex = sessions.findIndex(
       (s, idx) => idx > currentSessionIndex && !s.completed
     );
@@ -234,23 +233,9 @@ export function WorkoutPlayer({
       setCurrentSet(1);
     }
 
-    // Reset completing state immediately for instant button appearance
+    // Reset completing state for instant next button
     setIsCompleting(false);
-
-    // Update API in background, reset processing ref when done
-    onUpdateSession(currentSession.id, {
-      setsCompleted: 1,
-      repsPerSet: [1],
-      completed: true,
-    })
-      .then(() => {
-        isProcessingRef.current = false;
-      })
-      .catch((error) => {
-        console.error("Failed to update session:", error);
-        isProcessingRef.current = false;
-      });
-  }, [currentSession, currentSessionIndex, sessions, onUpdateSession, checkProgress]);
+  }, [currentSession, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const skipRest = () => {
     setIsResting(false);
