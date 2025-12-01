@@ -196,40 +196,21 @@ export function WorkoutPlayer({
     });
 
     // Update local UI state immediately after
-    if (isWorkoutComplete) {
-      // Move to next incomplete workout using session IDs (not indices)
-      let foundCurrent = false;
-      const nextIncompleteIndex = sessions.findIndex((s) => {
-        if (s.id === currentSession.id) {
-          foundCurrent = true;
-          return false; // Skip current session
-        }
-        return foundCurrent && !s.completed; // Find first incomplete after current
-      });
-
-      if (nextIncompleteIndex !== -1) {
-        setCurrentSessionIndex(nextIncompleteIndex);
-        setCurrentSet(1);
-        setIsResting(false);
-        // Reset expected sets for new workout (will sync from session data via useEffect)
-        setExpectedSetsCompleted(0);
-      }
-      // If no next workout, stay on current (will show completion message)
-    } else {
+    if (!isWorkoutComplete) {
       // Start rest timer immediately (only for weight-based workouts)
       if (workout.workoutType !== "time") {
-        // Don't manually set currentSet - let useEffect sync it from session data
         setRestTimeLeft(workout.restTime);
         setIsResting(true);
         setIsTimerActive(true);
       }
     }
+    // If workout complete, useEffect will handle moving to next workout after parent updates
 
     // Delay resetting isCompleting to prevent rapid duplicate clicks
-    // Gives time for parent's optimistic update to propagate
+    // Increased to 300ms to ensure parent state propagates
     setTimeout(() => {
       setIsCompleting(false);
-    }, 200);
+    }, 300);
   }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting, expectedSetsCompleted]);
 
   const completeWorkout = useCallback(async () => {
@@ -258,28 +239,13 @@ export function WorkoutPlayer({
       console.error("Failed to update session:", error);
     });
 
-    // Move to next incomplete workout using session IDs (not indices)
-    let foundCurrent = false;
-    const nextIncompleteIndex = sessions.findIndex((s) => {
-      if (s.id === currentSession.id) {
-        foundCurrent = true;
-        return false; // Skip current session
-      }
-      return foundCurrent && !s.completed; // Find first incomplete after current
-    });
-
-    if (nextIncompleteIndex !== -1) {
-      setCurrentSessionIndex(nextIncompleteIndex);
-      setCurrentSet(1);
-      // Reset expected sets for new workout (will sync from session data via useEffect)
-      setExpectedSetsCompleted(0);
-    }
-    // If no next workout, stay on current (will show completion message)
+    // useEffect will handle moving to next workout after parent updates
 
     // Delay resetting isCompleting to prevent rapid duplicate clicks
+    // Increased to 300ms to ensure parent state propagates
     setTimeout(() => {
       setIsCompleting(false);
-    }, 200);
+    }, 300);
   }, [currentSession, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const skipRest = () => {
