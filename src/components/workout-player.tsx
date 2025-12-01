@@ -25,7 +25,7 @@ export function WorkoutPlayer({
   recentSessions = [],
   onReorderSessions,
 }: WorkoutPlayerProps) {
-  const [currentSessionIndex, setCurrentSessionIndex] = useState(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSet, setCurrentSet] = useState(1);
   const [isResting, setIsResting] = useState(false);
   const [restTimeLeft, setRestTimeLeft] = useState(0);
@@ -41,13 +41,17 @@ export function WorkoutPlayer({
 
   // Find first incomplete session on mount
   useEffect(() => {
-    const firstIncompleteIndex = sessions.findIndex((s) => !s.completed);
-    if (firstIncompleteIndex !== -1) {
-      setCurrentSessionIndex(firstIncompleteIndex);
+    if (!currentSessionId) {
+      const firstIncomplete = sessions.find((s) => !s.completed);
+      if (firstIncomplete) {
+        setCurrentSessionId(firstIncomplete.id);
+      }
     }
-  }, [sessions]);
+  }, [sessions, currentSessionId]);
 
-  const currentSession = sessions[currentSessionIndex];
+  // Find current session by ID (not index - prevents wrong workout when array changes)
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  const currentSessionIndex = sessions.findIndex((s) => s.id === currentSessionId);
   const workout = currentSession?.workout;
 
   // Sync expectedSetsCompleted when session changes (new workout)
@@ -69,9 +73,9 @@ export function WorkoutPlayer({
   // This handles cases where data is refetched and current session is now complete
   useEffect(() => {
     if (currentSession?.completed && !isResting) {
-      // Find next incomplete using session IDs instead of indices
+      // Find next incomplete using session IDs
       let foundCurrent = false;
-      const nextIncompleteIndex = sessions.findIndex((s) => {
+      const nextIncomplete = sessions.find((s) => {
         if (s.id === currentSession.id) {
           foundCurrent = true;
           return false;
@@ -79,10 +83,13 @@ export function WorkoutPlayer({
         return foundCurrent && !s.completed;
       });
 
-      if (nextIncompleteIndex !== -1) {
-        setCurrentSessionIndex(nextIncompleteIndex);
+      if (nextIncomplete) {
+        setCurrentSessionId(nextIncomplete.id);
         setCurrentSet(1);
         setIsResting(false);
+      } else {
+        // No more incomplete workouts - clear current to show completion
+        setCurrentSessionId(null);
       }
     }
   }, [currentSession?.completed, currentSession?.id, sessions, isResting]);
@@ -211,7 +218,7 @@ export function WorkoutPlayer({
     setTimeout(() => {
       setIsCompleting(false);
     }, 300);
-  }, [currentSession, workout, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting, expectedSetsCompleted]);
+  }, [currentSession, workout, sessions, onUpdateSession, checkProgress, isCompleting, expectedSetsCompleted]);
 
   const completeWorkout = useCallback(async () => {
     if (!currentSession || isCompleting) return;
@@ -246,7 +253,7 @@ export function WorkoutPlayer({
     setTimeout(() => {
       setIsCompleting(false);
     }, 300);
-  }, [currentSession, currentSessionIndex, sessions, onUpdateSession, checkProgress, isCompleting]);
+  }, [currentSession, sessions, onUpdateSession, checkProgress, isCompleting]);
 
   const skipRest = () => {
     setIsResting(false);
