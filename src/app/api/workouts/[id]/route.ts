@@ -88,6 +88,49 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { weight } = body;
+
+    const existingWorkout = await prisma.workout.findFirst({
+      where: { id, userId: session.user.id },
+    });
+
+    if (!existingWorkout) {
+      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    }
+
+    if (weight === undefined) {
+      return NextResponse.json({ error: "Weight is required" }, { status: 400 });
+    }
+
+    const workout = await prisma.workout.update({
+      where: { id },
+      data: {
+        weight: parseFloat(weight),
+      },
+    });
+
+    return NextResponse.json(workout);
+  } catch (error) {
+    console.error("Patch workout error:", error);
+    return NextResponse.json(
+      { error: "Failed to update workout" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDuration } from "@/lib/utils";
 import type { WorkoutSession } from "@/types";
+import { WorkoutReview } from "@/components/workout-review";
 
 interface WorkoutPlayerProps {
   sessions: WorkoutSession[];
@@ -383,21 +384,53 @@ export function WorkoutPlayer({
     await onReorderSessions(newSessions.map((s) => s.id));
   };
 
+  const handleUpdateWorkout = async (workoutId: string, newWeight: number) => {
+    try {
+      const response = await fetch(`/api/workouts/${workoutId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ weight: newWeight }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update workout");
+      }
+
+      // Show success message
+      setProgressMessage("✨ Workout updated successfully!");
+      setTimeout(() => setProgressMessage(null), 3000);
+    } catch (error) {
+      console.error("Failed to update workout:", error);
+      setProgressMessage("❌ Failed to update workout. Please try again.");
+      setTimeout(() => setProgressMessage(null), 3000);
+      throw error;
+    }
+  };
+
   if (!currentSession || !workout) {
+    // Get all completed sessions from today
+    const completedSessions = sessions.filter((s) => {
+      const state = getSessionState(s.id);
+      return state?.completed;
+    });
+
     return (
-      <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
-            <Check className="h-8 w-8 text-emerald-500" />
+      <div className="space-y-4">
+        {/* Progress message */}
+        {progressMessage && (
+          <div className="bg-gradient-to-r from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 rounded-xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <p className="text-sm font-medium text-center">{progressMessage}</p>
           </div>
-          <h3 className="text-lg font-semibold text-emerald-500">
-            All Done for Today!
-          </h3>
-          <p className="text-muted-foreground text-sm mt-1">
-            Great job completing your workouts
-          </p>
-        </CardContent>
-      </Card>
+        )}
+
+        <WorkoutReview
+          completedSessions={completedSessions}
+          recentSessions={recentSessions}
+          onUpdateWorkout={handleUpdateWorkout}
+        />
+      </div>
     );
   }
 
