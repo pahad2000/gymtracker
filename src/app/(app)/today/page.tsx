@@ -434,8 +434,8 @@ export default function TodayPage() {
             </Card>
           ) : (
             <div className="text-center py-8">
-              <Button onClick={createSessionsForToday} disabled={creating}>
-                {creating ? (
+              <Button onClick={createSessionsForToday} disabled={creating || sessions.length > 0}>
+                {creating || sessions.length > 0 ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Starting...
