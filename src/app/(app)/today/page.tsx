@@ -106,7 +106,7 @@ export default function TodayPage() {
         });
       }
 
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Failed to create sessions:", error);
     } finally {
@@ -122,7 +122,7 @@ export default function TodayPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workoutId }),
       });
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Failed to create session:", error);
     } finally {
