@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical } from "lucide-react";
+import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDuration } from "@/lib/utils";
@@ -41,6 +41,7 @@ export function WorkoutPlayer({
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
+  const [reviewingSessionId, setReviewingSessionId] = useState<string | null>(null);
 
   // Queue-based processing to prevent race conditions
   const actionQueueRef = useRef<QueuedAction[]>([]);
@@ -208,23 +209,8 @@ export function WorkoutPlayer({
             newSetsCompleted
           );
 
-          // Move to next workout immediately
-          const currentIndex = sessions.findIndex((s) => s.id === session.id);
-          const nextIncomplete = sessions
-            .slice(currentIndex + 1)
-            .find((s) => {
-              const state = getSessionState(s.id);
-              return state && !state.completed;
-            });
-
-          if (nextIncomplete) {
-            setCurrentSessionId(nextIncomplete.id);
-            const nextState = getSessionState(nextIncomplete.id);
-            setCurrentSet((nextState?.setsCompleted || 0) + 1);
-            setIsResting(false);
-          } else {
-            setCurrentSessionId(null);
-          }
+          // Show review screen instead of immediately moving to next workout
+          setReviewingSessionId(session.id);
         } else {
           // Start rest timer for weight-based workouts
           if (workout.workoutType !== "time") {
@@ -262,23 +248,8 @@ export function WorkoutPlayer({
           1
         );
 
-        // Move to next workout
-        const currentIndex = sessions.findIndex((s) => s.id === session.id);
-        const nextIncomplete = sessions
-          .slice(currentIndex + 1)
-          .find((s) => {
-            const state = getSessionState(s.id);
-            return state && !state.completed;
-          });
-
-        if (nextIncomplete) {
-          setCurrentSessionId(nextIncomplete.id);
-          const nextState = getSessionState(nextIncomplete.id);
-          setCurrentSet((nextState?.setsCompleted || 0) + 1);
-          setIsResting(false);
-        } else {
-          setCurrentSessionId(null);
-        }
+        // Show review screen instead of immediately moving to next workout
+        setReviewingSessionId(session.id);
 
         // Persist to backend
         onUpdateSession(session.id, {
@@ -408,6 +379,192 @@ export function WorkoutPlayer({
       throw error;
     }
   };
+
+  const handleContinueFromReview = useCallback(() => {
+    if (!reviewingSessionId) return;
+
+    // Clear review state
+    setReviewingSessionId(null);
+
+    // Find next incomplete workout
+    const currentIndex = sessions.findIndex((s) => s.id === reviewingSessionId);
+    const nextIncomplete = sessions
+      .slice(currentIndex + 1)
+      .find((s) => {
+        const state = getSessionState(s.id);
+        return state && !state.completed;
+      });
+
+    if (nextIncomplete) {
+      setCurrentSessionId(nextIncomplete.id);
+      const nextState = getSessionState(nextIncomplete.id);
+      setCurrentSet((nextState?.setsCompleted || 0) + 1);
+      setIsResting(false);
+    } else {
+      setCurrentSessionId(null);
+    }
+  }, [reviewingSessionId, sessions, getSessionState]);
+
+  // If we're reviewing a specific workout, show the individual review screen
+  if (reviewingSessionId) {
+    const reviewSession = getSessionState(reviewingSessionId);
+    if (reviewSession) {
+      const reviewWorkout = reviewSession.workout;
+      const currentWeight = reviewSession.weightUsed || reviewWorkout.weight;
+      const unit = reviewWorkout.workoutType === "time" ? "min" : "kg";
+
+      // Find previous session for comparison
+      const previousSessions = recentSessions
+        .filter((s) => s.workoutId === reviewWorkout.id && s.completed && s.id !== reviewSession.id)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const previousSession = previousSessions[0] || null;
+
+      let progressType: "improved" | "maintained" | "decreased" | "first" = "first";
+      let progressAmount = 0;
+
+      if (previousSession) {
+        const previousWeight = previousSession.weightUsed || previousSession.workout.weight;
+        progressAmount = currentWeight - previousWeight;
+
+        if (progressAmount > 0) {
+          progressType = "improved";
+        } else if (progressAmount === 0) {
+          progressType = "maintained";
+        } else {
+          progressType = "decreased";
+        }
+      }
+
+      // Check if there are more workouts remaining
+      const currentIndex = sessions.findIndex((s) => s.id === reviewingSessionId);
+      const remainingWorkouts = sessions
+        .slice(currentIndex + 1)
+        .filter((s) => {
+          const state = getSessionState(s.id);
+          return state && !state.completed;
+        });
+      const hasMoreWorkouts = remainingWorkouts.length > 0;
+
+      return (
+        <div className="space-y-4">
+          {/* Progress message */}
+          {progressMessage && (
+            <div className="bg-gradient-to-r from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 rounded-xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <p className="text-sm font-medium text-center">{progressMessage}</p>
+            </div>
+          )}
+
+          <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-emerald-500" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl text-emerald-500">
+                    Workout Complete!
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {reviewWorkout.name}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Workout summary */}
+              <div className="bg-background/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    {reviewWorkout.workoutType === "time" ? "Duration" : "Weight Used"}
+                  </span>
+                  <span className="text-2xl font-bold text-primary">
+                    {currentWeight}{unit}
+                  </span>
+                </div>
+
+                {reviewWorkout.workoutType !== "time" && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Sets Completed</span>
+                    <span className="text-lg font-semibold">
+                      {reviewSession.setsCompleted} × {reviewWorkout.repsPerSet} reps
+                    </span>
+                  </div>
+                )}
+
+                {/* Progress indicator */}
+                <div className={cn(
+                  "flex items-center gap-2 p-3 rounded-lg",
+                  progressType === "improved" && "bg-emerald-500/20",
+                  progressType === "maintained" && "bg-blue-500/20",
+                  progressType === "decreased" && "bg-orange-500/20",
+                  progressType === "first" && "bg-purple-500/20"
+                )}>
+                  {progressType === "improved" && (
+                    <>
+                      <TrendingUp className="h-5 w-5 text-emerald-500" />
+                      <span className="text-sm font-medium text-emerald-500">
+                        +{Math.abs(progressAmount)}{unit} from last time!
+                      </span>
+                    </>
+                  )}
+                  {progressType === "maintained" && (
+                    <>
+                      <Minus className="h-5 w-5 text-blue-500" />
+                      <span className="text-sm font-medium text-blue-500">
+                        Same as last time
+                      </span>
+                    </>
+                  )}
+                  {progressType === "decreased" && (
+                    <>
+                      <TrendingDown className="h-5 w-5 text-orange-500" />
+                      <span className="text-sm font-medium text-orange-500">
+                        -{Math.abs(progressAmount)}{unit} from last time
+                      </span>
+                    </>
+                  )}
+                  {progressType === "first" && (
+                    <>
+                      <Sparkles className="h-5 w-5 text-purple-500" />
+                      <span className="text-sm font-medium text-purple-500">
+                        First time completing this workout!
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Continue button */}
+              <Button
+                onClick={handleContinueFromReview}
+                size="lg"
+                className="w-full h-14 text-lg"
+              >
+                {hasMoreWorkouts ? (
+                  <>
+                    <SkipForward className="h-5 w-5 mr-2" />
+                    Continue to Next Workout
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-5 w-5 mr-2" />
+                    Finish Session
+                  </>
+                )}
+              </Button>
+
+              {/* Show remaining workouts */}
+              {hasMoreWorkouts && (
+                <div className="text-center text-sm text-muted-foreground">
+                  {remainingWorkouts.length} workout{remainingWorkouts.length > 1 ? "s" : ""} remaining
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+  }
 
   if (!currentSession || !workout) {
     // Get all completed sessions from today
