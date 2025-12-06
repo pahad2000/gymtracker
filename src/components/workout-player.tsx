@@ -42,6 +42,7 @@ export function WorkoutPlayer({
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
   const [reviewingSessionId, setReviewingSessionId] = useState<string | null>(null);
+  const [reviewSessionData, setReviewSessionData] = useState<WorkoutSession | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const touchElementRef = useRef<HTMLDivElement | null>(null);
   const [weightAdjustment, setWeightAdjustment] = useState(0);
@@ -217,7 +218,14 @@ export function WorkoutPlayer({
           );
 
           // Show review screen instead of immediately moving to next workout
+          // Store session data separately to survive sessions array updates
+          const sessionWithLocalState = {
+            ...session,
+            setsCompleted: newSetsCompleted,
+            completed: isWorkoutComplete,
+          };
           setReviewingSessionId(session.id);
+          setReviewSessionData(sessionWithLocalState);
         } else {
           // Start rest timer for weight-based workouts
           if (workout.workoutType !== "time") {
@@ -256,7 +264,14 @@ export function WorkoutPlayer({
         );
 
         // Show review screen instead of immediately moving to next workout
+        // Store session data separately to survive sessions array updates
+        const sessionWithLocalState = {
+          ...session,
+          setsCompleted: 1,
+          completed: true,
+        };
         setReviewingSessionId(session.id);
+        setReviewSessionData(sessionWithLocalState);
 
         // Persist to backend
         onUpdateSession(session.id, {
@@ -477,6 +492,7 @@ export function WorkoutPlayer({
 
     // Clear review state
     setReviewingSessionId(null);
+    setReviewSessionData(null);
     setWeightAdjustment(0);
 
     // Find next incomplete workout
@@ -499,8 +515,8 @@ export function WorkoutPlayer({
   }, [reviewingSessionId, sessions, getSessionState]);
 
   // If we're reviewing a specific workout, show the individual review screen
-  if (reviewingSessionId) {
-    const reviewSession = getSessionState(reviewingSessionId);
+  if (reviewingSessionId && reviewSessionData) {
+    const reviewSession = reviewSessionData;
     if (reviewSession) {
       const reviewWorkout = reviewSession.workout;
       const currentWeight = reviewSession.weightUsed || reviewWorkout.weight;
