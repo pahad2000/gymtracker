@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Play, Pause, SkipForward, Check, Sparkles, RotateCcw, Settings2, GripVertical, TrendingUp, TrendingDown, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDuration } from "@/lib/utils";
@@ -44,6 +44,8 @@ export function WorkoutPlayer({
   const [reviewingSessionId, setReviewingSessionId] = useState<string | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const touchElementRef = useRef<HTMLDivElement | null>(null);
+  const [weightAdjustment, setWeightAdjustment] = useState(0);
+  const [isUpdatingWeight, setIsUpdatingWeight] = useState(false);
 
   // Queue-based processing to prevent race conditions
   const actionQueueRef = useRef<QueuedAction[]>([]);
@@ -441,11 +443,38 @@ export function WorkoutPlayer({
     }
   };
 
+  const handleAdjustWeight = (change: number, currentWeight: number, workoutType: string) => {
+    const newAdjustment = weightAdjustment + change;
+    const newWeight = currentWeight + newAdjustment;
+
+    // Prevent negative weights
+    if (newWeight <= 0) return;
+
+    setWeightAdjustment(newAdjustment);
+  };
+
+  const handleApplyWeightAdjustment = async (workoutId: string, currentWeight: number) => {
+    if (weightAdjustment === 0) return;
+
+    const newWeight = currentWeight + weightAdjustment;
+    setIsUpdatingWeight(true);
+
+    try {
+      await handleUpdateWorkout(workoutId, newWeight);
+      setWeightAdjustment(0);
+    } catch (error) {
+      console.error("Failed to update workout:", error);
+    } finally {
+      setIsUpdatingWeight(false);
+    }
+  };
+
   const handleContinueFromReview = useCallback(() => {
     if (!reviewingSessionId) return;
 
     // Clear review state
     setReviewingSessionId(null);
+    setWeightAdjustment(0);
 
     // Find next incomplete workout
     const currentIndex = sessions.findIndex((s) => s.id === reviewingSessionId);
@@ -593,6 +622,102 @@ export function WorkoutPlayer({
                     </>
                   )}
                 </div>
+              </div>
+
+              {/* Weight/Time Adjustment Controls */}
+              <div className="bg-background/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">
+                    Adjust for next time:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAdjustWeight(
+                        reviewWorkout.workoutType === "time" ? -5 : -2.5,
+                        currentWeight,
+                        reviewWorkout.workoutType
+                      )}
+                      disabled={isUpdatingWeight || (currentWeight + weightAdjustment) <= (reviewWorkout.workoutType === "time" ? 5 : 2.5)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-[100px] text-center">
+                      <span className="text-lg font-semibold">
+                        {(currentWeight + weightAdjustment).toFixed(1)}{unit}
+                      </span>
+                      {weightAdjustment !== 0 && (
+                        <span className={cn(
+                          "text-xs ml-1",
+                          weightAdjustment > 0 ? "text-emerald-500" : "text-orange-500"
+                        )}>
+                          ({weightAdjustment > 0 ? "+" : ""}{weightAdjustment.toFixed(1)})
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAdjustWeight(
+                        reviewWorkout.workoutType === "time" ? 5 : 2.5,
+                        currentWeight,
+                        reviewWorkout.workoutType
+                      )}
+                      disabled={isUpdatingWeight}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Quick suggestion for maintained/improved progress */}
+                {weightAdjustment === 0 && (progressType === "maintained" || progressType === "improved") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const suggestion = reviewWorkout.workoutType === "time"
+                        ? Math.max(5, Math.round(currentWeight * 0.1))
+                        : Math.max(2.5, Math.round((currentWeight * 0.05) / 2.5) * 2.5);
+                      setWeightAdjustment(suggestion);
+                    }}
+                    disabled={isUpdatingWeight}
+                    className="w-full"
+                  >
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    {progressType === "maintained" ? "Increase for progress" : "Continue improving"}
+                    {" (+"}
+                    {reviewWorkout.workoutType === "time"
+                      ? Math.max(5, Math.round(currentWeight * 0.1))
+                      : Math.max(2.5, Math.round((currentWeight * 0.05) / 2.5) * 2.5)
+                    }
+                    {unit})
+                  </Button>
+                )}
+
+                {/* Apply adjustment button */}
+                {weightAdjustment !== 0 && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => handleApplyWeightAdjustment(reviewWorkout.id, currentWeight)}
+                    disabled={isUpdatingWeight}
+                    className="w-full"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    {isUpdatingWeight ? "Updating..." : "Apply Change"}
+                  </Button>
+                )}
+
+                <p className="text-xs text-muted-foreground text-center">
+                  {reviewWorkout.workoutType === "time"
+                    ? "Adjust duration in 5 minute increments"
+                    : "Adjust weight in 2.5kg increments"
+                  }
+                </p>
               </div>
 
               {/* Continue button */}
