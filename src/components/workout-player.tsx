@@ -72,6 +72,9 @@ export function WorkoutPlayer({
 
   // Find first incomplete session on mount and when sessions change
   useEffect(() => {
+    // Don't change current session while reviewing - let the review flow handle navigation
+    if (reviewingSessionId) return;
+
     if (!currentSessionId || !sessions.find((s) => s.id === currentSessionId)) {
       // Find first incomplete using local state if available
       const firstIncomplete = sessions.find((s) => {
@@ -88,7 +91,7 @@ export function WorkoutPlayer({
         setCurrentSessionId(null);
       }
     }
-  }, [sessions, currentSessionId, getSessionState]);
+  }, [sessions, currentSessionId, getSessionState, reviewingSessionId]);
 
   // Get current session using local optimistic state
   const currentSession = getSessionState(currentSessionId || '');
