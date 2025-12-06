@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Sun, Moon, Monitor } from "lucide-react";
+import { Loader2, Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -154,6 +155,24 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mt-3">
             Auto mode switches between light (7am-7pm) and dark (7pm-7am) based on time.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Account Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Account</CardTitle>
+          <CardDescription>Manage your account actions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="w-full"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button>
         </CardContent>
       </Card>
     </div>

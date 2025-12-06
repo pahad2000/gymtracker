@@ -374,23 +374,21 @@ export function WorkoutPlayer({
 
     const touch = e.touches[0];
     const touchY = touch.clientY;
+    const touchX = touch.clientX;
 
-    // Find all workout items
-    const container = e.currentTarget.parentElement;
-    if (!container) return;
+    // Find the element at the touch position
+    const elementAtPoint = document.elementFromPoint(touchX, touchY);
+    if (!elementAtPoint) return;
 
-    const items = Array.from(container.children) as HTMLElement[];
+    // Find the closest workout item ancestor
+    const workoutItem = elementAtPoint.closest('[data-workout-item]') as HTMLElement;
+    if (!workoutItem) return;
 
-    // Determine which item we're over
-    let newDragOverIndex: number | null = null;
-    items.forEach((item, index) => {
-      const rect = item.getBoundingClientRect();
-      if (touchY >= rect.top && touchY <= rect.bottom) {
-        newDragOverIndex = index;
-      }
-    });
-
-    setDragOverUpcomingIndex(newDragOverIndex);
+    // Get the index from the data attribute
+    const index = parseInt(workoutItem.dataset.workoutIndex || '-1', 10);
+    if (index >= 0 && index !== draggedUpcomingIndex) {
+      setDragOverUpcomingIndex(index);
+    }
   };
 
   const handleTouchEnd = async (e: React.TouchEvent, upcomingWorkoutsLength: number) => {
@@ -850,6 +848,8 @@ export function WorkoutPlayer({
               {upcomingWorkouts.map((session, index) => (
                 <div
                   key={session.id}
+                  data-workout-item
+                  data-workout-index={index}
                   draggable={reorderMode}
                   onDragStart={(e) => reorderMode && handleUpcomingDragStart(e, index)}
                   onDragEnd={handleUpcomingDragEnd}
