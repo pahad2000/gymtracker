@@ -42,6 +42,8 @@ export function WorkoutPlayer({
   const [draggedUpcomingIndex, setDraggedUpcomingIndex] = useState<number | null>(null);
   const [dragOverUpcomingIndex, setDragOverUpcomingIndex] = useState<number | null>(null);
   const [reviewingSessionId, setReviewingSessionId] = useState<string | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const touchElementRef = useRef<HTMLDivElement | null>(null);
 
   // Queue-based processing to prevent race conditions
   const actionQueueRef = useRef<QueuedAction[]>([]);
@@ -353,6 +355,67 @@ export function WorkoutPlayer({
 
     // Update immediately (optimistic)
     await onReorderSessions(newSessions.map((s) => s.id));
+  };
+
+  // Touch event handlers for mobile support
+  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    if (!reorderMode) return;
+    setDraggedUpcomingIndex(index);
+    setTouchStartY(e.touches[0].clientY);
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = "0.5";
+    touchElementRef.current = target as HTMLDivElement;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!reorderMode || draggedUpcomingIndex === null || touchStartY === null) return;
+
+    e.preventDefault(); // Prevent scrolling while dragging
+
+    const touch = e.touches[0];
+    const touchY = touch.clientY;
+
+    // Find all workout items
+    const container = e.currentTarget.parentElement;
+    if (!container) return;
+
+    const items = Array.from(container.children) as HTMLElement[];
+
+    // Determine which item we're over
+    let newDragOverIndex: number | null = null;
+    items.forEach((item, index) => {
+      const rect = item.getBoundingClientRect();
+      if (touchY >= rect.top && touchY <= rect.bottom) {
+        newDragOverIndex = index;
+      }
+    });
+
+    setDragOverUpcomingIndex(newDragOverIndex);
+  };
+
+  const handleTouchEnd = async (e: React.TouchEvent, upcomingWorkoutsLength: number) => {
+    if (!reorderMode || draggedUpcomingIndex === null) return;
+
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = "1";
+
+    // Perform the reorder if we have a valid drop target
+    if (dragOverUpcomingIndex !== null && dragOverUpcomingIndex !== draggedUpcomingIndex && onReorderSessions) {
+      const dragAbsoluteIndex = currentSessionIndex + 1 + draggedUpcomingIndex;
+      const dropAbsoluteIndex = currentSessionIndex + 1 + dragOverUpcomingIndex;
+
+      const newSessions = [...sessions];
+      const [draggedSession] = newSessions.splice(dragAbsoluteIndex, 1);
+      newSessions.splice(dropAbsoluteIndex, 0, draggedSession);
+
+      await onReorderSessions(newSessions.map((s) => s.id));
+    }
+
+    // Reset state
+    setDraggedUpcomingIndex(null);
+    setDragOverUpcomingIndex(null);
+    setTouchStartY(null);
+    touchElementRef.current = null;
   };
 
   const handleUpdateWorkout = async (workoutId: string, newWeight: number) => {
@@ -780,7 +843,7 @@ export function WorkoutPlayer({
             </div>
             {reorderMode && upcomingWorkouts.length > 1 && (
               <p className="text-xs text-muted-foreground text-center">
-                Drag and drop to reorder workouts
+                Tap and drag to reorder workouts
               </p>
             )}
             <div className="space-y-2">
@@ -793,6 +856,9 @@ export function WorkoutPlayer({
                   onDragOver={(e) => reorderMode && handleUpcomingDragOver(e, index)}
                   onDragLeave={handleUpcomingDragLeave}
                   onDrop={(e) => reorderMode && handleUpcomingDrop(e, index)}
+                  onTouchStart={(e) => handleTouchStart(e, index)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={(e) => handleTouchEnd(e, upcomingWorkouts.length)}
                   className={cn(
                     "flex items-center gap-3 p-3 rounded-xl transition-all duration-200",
                     reorderMode ? [
@@ -801,6 +867,7 @@ export function WorkoutPlayer({
                       draggedUpcomingIndex !== index && "bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted hover:shadow-sm"
                     ] : "bg-muted/50"
                   )}
+                  style={{ touchAction: reorderMode ? 'none' : 'auto' }}
                 >
                   {reorderMode && (
                     <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
