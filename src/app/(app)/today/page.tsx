@@ -22,6 +22,7 @@ export default function TodayPage() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [localWorkoutOrder, setLocalWorkoutOrder] = useState<string[]>([]);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
 
   const today = new Date();
 
@@ -294,6 +295,69 @@ export default function TodayPage() {
     }
   };
 
+  // Touch event handlers for mobile support
+  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    setDraggedIndex(index);
+    setTouchStartY(e.touches[0].clientY);
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = "0.5";
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (draggedIndex === null || touchStartY === null) return;
+
+    e.preventDefault(); // Prevent scrolling while dragging
+
+    const touch = e.touches[0];
+    const touchY = touch.clientY;
+    const touchX = touch.clientX;
+
+    // Find the element at the touch position
+    const elementAtPoint = document.elementFromPoint(touchX, touchY);
+    if (!elementAtPoint) return;
+
+    // Find the closest workout item ancestor
+    const workoutItem = elementAtPoint.closest('[data-initial-workout-item]') as HTMLElement;
+    if (!workoutItem) return;
+
+    // Get the index from the data attribute
+    const index = parseInt(workoutItem.dataset.initialWorkoutIndex || '-1', 10);
+    if (index >= 0 && index !== draggedIndex) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleTouchEnd = async (e: React.TouchEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = "1";
+
+    // Perform the reorder if we have a valid drop target
+    if (dragOverIndex !== null && dragOverIndex !== draggedIndex && draggedIndex !== null) {
+      const newOrder = [...localWorkoutOrder];
+      const [draggedId] = newOrder.splice(draggedIndex, 1);
+      newOrder.splice(dragOverIndex, 0, draggedId);
+      setLocalWorkoutOrder(newOrder);
+
+      // Save to server in background
+      try {
+        await fetch("/api/workouts/reorder", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutIds: newOrder }),
+        });
+      } catch (error) {
+        console.error("Failed to save workout order:", error);
+        // Revert on error
+        fetchData();
+      }
+    }
+
+    // Reset state
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    setTouchStartY(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -400,23 +464,29 @@ export default function TodayPage() {
             <Card>
               <CardContent className="p-4 space-y-2">
                 <p className="text-xs text-muted-foreground text-center mb-3">
-                  Drag and drop to reorder workouts
+                  Tap and drag to reorder workouts
                 </p>
                 {orderedWorkouts.map((workout, index) => (
                   <div
                     key={workout.id}
+                    data-initial-workout-item
+                    data-initial-workout-index={index}
                     draggable
                     onDragStart={(e) => handleDragStart(e, index)}
                     onDragEnd={handleDragEnd}
                     onDragOver={(e) => handleDragOver(e, index)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
+                    onTouchStart={(e) => handleTouchStart(e, index)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
                     className={cn(
                       "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
                       draggedIndex === index && "opacity-40",
                       dragOverIndex === index && draggedIndex !== index && "border-2 border-primary border-dashed",
                       draggedIndex !== index && "bg-muted/50 hover:bg-muted cursor-grab active:cursor-grabbing hover:shadow-sm"
                     )}
+                    style={{ touchAction: 'none' }}
                   >
                     <GripVertical className="h-5 w-5 text-muted-foreground shrink-0" />
                     <div className="flex-1">
